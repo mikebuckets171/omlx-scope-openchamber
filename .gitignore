@@ -8,3 +8,7 @@ node_modules/
 coverage/
 dist/
 artifacts/
+
+# Local review/build tools and browser evidence are never extension assets.
+.review-tools/
+test-results/

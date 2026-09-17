@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { OmlxClient, __test__ } from './omlx-client.ts';
+import { resolveOmlxConfig, type OmlxConfig } from './config.ts';
 
 const response = (body: unknown, init: ResponseInit = {}) => new Response(JSON.stringify(body), {
   status: 200,
@@ -7,11 +8,15 @@ const response = (body: unknown, init: ResponseInit = {}) => new Response(JSON.s
   ...init,
 });
 
-const config = {
+const config: OmlxConfig = {
   baseURL: new URL('http://127.0.0.1:8123/'),
   apiKey: 'private-key',
   preferredModel: null,
   error: null,
+  issue: 'none',
+  source: 'environment',
+  configStatus: 'missing',
+  authStatus: 'missing',
 };
 
 describe('OMLX Scope service client', () => {
@@ -23,7 +28,17 @@ describe('OMLX Scope service client', () => {
   it('performs health, optional model status, login, stats, and activity reads', async () => {
     const calls: Array<{ url: string; init: RequestInit }> = [];
     const fetchImpl = async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
-      calls.push({ url: String(url), init: init ?? {} });
+      const headers: Record<string, string> = {};
+      if (init?.headers) {
+        if (init.headers instanceof Headers) {
+          for (const [k, v] of (init.headers as unknown as { entries(): IterableIterator<[string, string]> }).entries()) headers[k] = v;
+        } else if (Array.isArray(init.headers)) {
+          for (const [k, v] of init.headers as Array<[string, string]>) headers[k] = v;
+        } else {
+          Object.assign(headers, init.headers as Record<string, string>);
+        }
+      }
+      calls.push({ url: String(url), init: { ...init, headers } as RequestInit });
       if (String(url).endsWith('/health')) return response({ status: 'healthy', engine_pool: { model_count: 1 } });
       if (String(url).endsWith('/v1/models/status')) return response({ models: [{ id: 'qwen', max_context_window: 8192 }] });
       if (String(url).endsWith('/admin/api/login')) return response({ ok: true }, { headers: { 'set-cookie': 'omlx_admin_session=test-cookie; Path=/' } });
@@ -43,13 +58,17 @@ describe('OMLX Scope service client', () => {
     expect(calls.map((call) => call.url)).toEqual([
       'http://127.0.0.1:8123/health',
       'http://127.0.0.1:8123/admin/api/login',
+      'http://127.0.0.1:8123/admin/api/activity',
       'http://127.0.0.1:8123/v1/models/status',
       'http://127.0.0.1:8123/admin/api/stats?scope=session',
-      'http://127.0.0.1:8123/admin/api/activity',
     ]);
-    expect((calls[1].init.headers as Record<string, string>)['Content-Type']).toBe('application/json');
-    expect((calls[2].init.headers as Record<string, string>)['Content-Type']).toBeUndefined();
-    expect((calls[3].init.headers as Record<string, string>).Cookie).toBe('omlx_admin_session=test-cookie');
+    const headersOf = (suffix: string): Record<string, string> | undefined => {
+      const found = calls.find((call) => call.url.endsWith(suffix));
+      return found ? (found.init.headers as Record<string, string>) : undefined;
+    };
+    expect(headersOf('/admin/api/login')?.['Content-Type']).toBe('application/json');
+    expect(headersOf('/stats?scope=session')?.Cookie).toBe('omlx_admin_session=test-cookie');
+    expect(headersOf('/v1/models/status')?.['Content-Type']).toBeUndefined();
   });
 
   it('coalesces panels, caches config and returns a valid no-model snapshot', async () => {
@@ -111,4 +130,78 @@ describe('OMLX Scope service client', () => {
     expect((await client.snapshot()).available).toBe(false);
     expect(calls).toEqual(['http://127.0.0.1:8123/health']);
   });
+
+  it('keeps live activity when session statistics are unavailable', async () => {
+    let statsCalls = 0;
+    const fetchImpl = async (url: RequestInfo | URL): Promise<Response> => {
+      if (String(url).endsWith('/health')) return response({ status: 'healthy', engine_pool: { model_count: 1 } });
+      if (String(url).endsWith('/admin/api/login')) return response({}, { headers: { 'set-cookie': 'omlx_admin_session=fixture;' } });
+      if (String(url).includes('/stats')) {
+        statsCalls += 1;
+        return response({ error: 'temporary' }, { status: 503 });
+      }
+      if (String(url).endsWith('/activity')) return response({
+        active_models: { models: [{ id: 'qwen', active_requests: 1, prefilling: [], generating: [{ request_id: 'private', generated_tokens: 24, elapsed_seconds: 1.5, tokens_per_second: 16, last_activity_age_seconds: 0, prompt_tokens: 512 }], waiting: [], activities: [] }] },
+      });
+      return response({ models: [] });
+    };
+    const client = new OmlxClient({ fetchImpl, readConfig: async () => config, now: () => 100_000 });
+    const first = await client.snapshot();
+    expect(first).toMatchObject({ available: true, modelID: 'qwen', liveDecodeTPS: 16, sessionStatsState: 'unavailable' });
+    expect(statsCalls).toBe(1);
+  });
+
+  it('expires the snapshot by a single deadline rather than each endpoint', async () => {
+    let mono = 0;
+    const fetchImpl = async (url: RequestInfo | URL): Promise<Response> => {
+      if (String(url).endsWith('/health')) return response({ status: 'healthy', engine_pool: { model_count: 1 } });
+      if (String(url).endsWith('/admin/api/login')) return response({}, { headers: { 'set-cookie': 'omlx_admin_session=fixture;' } });
+      if (String(url).includes('/stats')) {
+        await new Promise((resolve) => setTimeout(resolve, 5_000));
+        return response({ engines: {}, active_models: { models: [] } });
+      }
+      if (String(url).endsWith('/activity')) return response({ active_models: { models: [] } });
+      if (String(url).endsWith('/v1/models/status')) return response({ models: [] });
+      return response({});
+    };
+    const client = new OmlxClient({
+      fetchImpl,
+      readConfig: async () => config,
+      now: () => 100_000,
+      monotonicNow: () => (mono += 1_000),
+      collectionDeadlineMs: 1_500,
+    });
+    const result = await client.snapshot();
+    expect(result).toMatchObject({ available: false, reason: 'runtime_unreachable' });
+    expect((result as { message: string | null }).message).toMatch(/deadline/);
+  });
+
+  it('honours an absolute OPENCODE_CONFIG override and refuses non-absolute values', async () => {
+    const absolute = '/tmp/omlx-scope-override-config.json';
+    const files = new Map<string, string>([
+      [absolute, JSON.stringify({ provider: { omlx: { options: { baseURL: 'http://127.0.0.1:8123/v1' } } } })],
+    ]);
+    expect((await resolveOmlxConfig({
+      env: { OPENCODE_CONFIG: absolute },
+      home: '/tmp/omlx-scope-override-home',
+      readText: async (path) => files.get(path) ?? null,
+    })).baseURL?.toString()).toBe('http://127.0.0.1:8123/');
+    expect((await resolveOmlxConfig({
+      env: { OPENCODE_CONFIG: 'relative.json' },
+      home: '/tmp/omlx-scope-override-home',
+      readText: async () => null,
+    })).issue).toBe('unsupported_config');
+  });
+});
+
+
+it('shares a bounded failure backoff independently of host resource polling', async () => {
+  let clock = 100_000, calls = 0;
+  const client = new OmlxClient({ now: () => clock, monotonicNow: () => clock,
+    readConfig: async () => config, fetchImpl: async () => { calls++; throw Error('offline'); } });
+  await client.snapshot(); expect(calls).toBe(1);
+  clock += 500; await client.snapshot(); expect(calls).toBe(1);
+  clock += 500; await client.snapshot(); expect(calls).toBe(2);
+  clock += 1000; await client.snapshot(); expect(calls).toBe(2);
+  clock += 1000; await client.snapshot(); expect(calls).toBe(3);
 });

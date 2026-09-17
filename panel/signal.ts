@@ -8,6 +8,8 @@ export class SignalHistory {
   private identity = '';
   private segment = 0;
 
+  break(): void { this.identity = ''; }
+
   observe(snapshot: TelemetrySnapshot): void {
     this.prune(snapshot.sampledAt);
     const rate = snapshot.phase === 'decode' ? snapshot.liveDecodeTPS

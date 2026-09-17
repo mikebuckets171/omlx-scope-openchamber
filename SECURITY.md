@@ -3,8 +3,9 @@
 ## Supported versions
 
 Only the latest GitHub release is supported. The plugin targets OpenChamber
-1.24.0 or newer and a local oMLX server exposing the documented endpoint
-shapes used by the service client.
+1.24.0 or newer and a local oMLX server exposing the endpoint
+shapes described in the metric reference. Dashboard APIs may change between
+oMLX versions.
 
 ## Reporting a vulnerability
 
