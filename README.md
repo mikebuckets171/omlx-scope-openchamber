@@ -25,6 +25,10 @@ bun install --frozen-lockfile
 bun run check
 ```
 
+`bun run check` type-checks, runs the unit/integration suite, builds the
+guest bundles, runs the pinned browser test suite, and rebuilds a
+deterministic ZIP archive under `dist/` for inspection.
+
 The checked-in installable package is the folder itself. It contains:
 
 - `package.json` with the OpenChamber manifest;
@@ -42,10 +46,11 @@ The checked-in installable package is the folder itself. It contains:
 4. Approve the requested local-service capability, then open **OMLX Scope** from
    the extension rail.
 
-From a session's actions menu, **Open OMLX Scope** opens the same panel with the
-session name shown as context. The official guest SDK keeps extension pages in
-their own surface; it does not allow an extension to inject content directly
-into OpenChamber's built-in Session inspector.
+From a session's actions menu, **Open OMLX Scope** opens the same panel; the
+panel never filters its telemetry to a specific session and instead shows
+runtime-wide readings. The official guest SDK keeps extension pages in their
+own surface; it does not allow an extension to inject content directly into
+OpenChamber's built-in Session inspector.
 
 The renamed `omlx-scope` panel is a new OpenChamber extension identity. If you
 previously installed **oMLX Telemetry** or the older `rapidscope` build, remove
@@ -60,23 +65,30 @@ still binds its own listener only to `127.0.0.1`.
 
 The service reads the existing local OpenCode/oMLX configuration on the host:
 
-- `~/.config/opencode/opencode.json` for an `omlx` provider `options.baseURL`
-  and the selected `omlx/<model>`;
+- `~/.config/opencode/opencode.json` (JSON or JSONC) for an `omlx` provider
+  `options.baseURL` and the selected `omlx/<model>`;
 - `~/.omlx/settings.json` for the native oMLX `server.host` and `server.port`
   fallback;
-- `~/.local/share/opencode/auth.json` for the `omlx` API credential.
+- `$XDG_DATA_HOME/opencode/auth.json` (default
+  `~/.local/share/opencode/auth.json`) for the `omlx` API credential.
 
-Only numeric loopback HTTP origins (`http://127.0.0.1:<port>`) are accepted.
-The credential is read and used by the service process; it is not passed to the
-panel or logged. The panel receives only normalized scalar telemetry.
+When `OPENCODE_CONFIG` is set to an absolute path it overrides the supported
+files; non-absolute paths are rejected. The service reports `missing_`,
+`unreadable_`, `malformed_`, or `invalid_endpoint` issues for the resolver
+step rather than silently choosing another endpoint after a malformed
+explicit configuration. Only numeric loopback HTTP origins
+(`http://127.0.0.1:<port>`) are accepted. The credential is read and used by
+the service process; it is not passed to the panel or logged. The panel
+receives only normalized scalar telemetry.
+
 The OMLX Scope panel also surfaces oMLX's weighted prefill average, decode
 average, and cache-efficiency percentage; these aggregates are scoped to the
-oMLX server session/statistics reset and are not current request rates.
+oMLX server session/statistics reset and are not current request rates, and
+they remain labelled as `since start / reset` or `last successful read` so
+stale session totals are not mistaken for live readings.
 
 For isolated local tests, `OMLX_SCOPE_BASE_URL`, `OMLX_SCOPE_API_KEY`, and
 `OMLX_SCOPE_MODEL` may be supplied to the service process.
-OpenChamber's host intentionally does not forward arbitrary parent environment
-variables to installed services, so normal installs should use the files above.
 
 ## Development and release
 
@@ -98,9 +110,13 @@ is clean after the build. The GitHub Actions workflow performs the same check.
 - Host surfaces: OpenChamber web and desktop. VS Code and mobile are not
   currently supported by the host.
 - oMLX: the local health, login, model-status, session-stats, and activity API
-  shapes used by the service client.
+  shapes used by the service client. The extension was authored against
+  oMLX `0.7.0.dev3`; behavior on other versions has not been measured.
 - Read-only: the extension exposes no prompt, inference, model, or runtime
   control action.
+- The companion session action is a presentation shortcut that opens the same
+  panel with the session name as context. It does not verify a session-to-
+  request correlation and the panel always shows runtime-wide telemetry.
 
 ## Privacy and security
 

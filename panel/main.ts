@@ -1,6 +1,8 @@
-import { connectHost, isGuestSessionItem, type GuestItem } from '@openchamber/sdk';
+import { connectHost } from '@openchamber/sdk';
 import { applyHostReady } from '@openchamber/sdk/ui';
 import { parseTelemetrySnapshot, unavailableTelemetry, type AvailableTelemetry, type TelemetryPhase } from '../src/telemetry.ts';
+
+import { unavailableForHostError, unavailableForServiceResponse } from './host-errors.ts';
 import { SignalHistory, nextDelay, traceGeometry } from './signal.ts';
 import { Poller } from './poller.ts';
 
@@ -16,7 +18,6 @@ root.innerHTML = `
     <button id="refresh" type="button" title="Refresh local telemetry" aria-label="Refresh local telemetry"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 7a6 6 0 1 0 .1 5M16 3v4h-4"/></svg></button>
   </header>
   <div class="connection"><span class="connection-dot" aria-hidden="true"></span><span id="connection" role="status">Connecting to oMLX</span><span class="local-tag">LOCAL / READ ONLY</span></div>
-  <div id="session-context" class="session-context" aria-live="polite" hidden><span class="session-context-label">SESSION</span><span id="session-context-title"></span></div>
   <p id="notice" class="notice" role="status" hidden></p>
   <section class="instrument" aria-label="Inference activity">
     <div class="model-line"><span class="eyebrow">INFERENCE</span><span id="phase" class="phase">Connecting</span></div>
@@ -39,7 +40,7 @@ root.innerHTML = `
     <div class="section-heading"><h2 id="machine-title">This Mac</h2><span id="machine-note">Host system · not oMLX alone</span></div>
     <div class="machine-values"><div><span>CPU</span><strong id="cpu">—</strong><div class="meter" aria-hidden="true"><i id="cpu-bar"></i></div></div><div title="Physical memory minus OS-reported free memory. Includes reclaimable pages; not Activity Monitor’s Memory Used or memory pressure."><span>Non-free RAM</span><strong id="ram">—</strong><div class="meter" aria-hidden="true"><i id="ram-bar"></i></div></div></div>
   </section>
-  <section class="session" aria-labelledby="session-title"><div class="section-heading"><h2 id="session-title">Server session</h2><span id="uptime">Since start / reset</span></div><div class="session-values"><div><span>Decode average</span><strong id="average-decode">—</strong></div><div><span>Prefill average</span><strong id="average-prefill">—</strong></div><div><span>Cache efficiency</span><strong id="average-cache">—</strong></div></div></section>
+  <section class="session" aria-labelledby="session-title"><div class="section-heading"><h2 id="session-title">Server session</h2><span id="uptime">Runtime-wide · aggregate unavailable</span></div><div class="session-values"><div><span>Decode average</span><strong id="average-decode">—</strong></div><div><span>Prefill average</span><strong id="average-prefill">—</strong></div><div><span>Cache efficiency</span><strong id="average-cache">—</strong></div></div></section>
   <details class="details"><summary>Runtime details<span aria-hidden="true">+</span></summary><dl>
     <div><dt>oMLX process footprint</dt><dd id="process-memory">—</dd></div>
     <div><dt>Model allocation</dt><dd id="model-memory">—</dd></div>
@@ -66,6 +67,7 @@ let last: AvailableTelemetry | null = null;
 let failures = 0;
 let mounted = false;
 let manualRefresh = false;
+let disposed = false;
 const number = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
 const rateNumber = new Intl.NumberFormat(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const compact = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 });
@@ -76,12 +78,6 @@ const ratio = (a: number | null | undefined, b: number | null | undefined): numb
 const percent = (value: number | null | undefined): string => value == null ? '—' : `${Math.round(value)}%`;
 const age = (at: number): string => { const seconds = Math.max(0, Math.floor((Date.now() - at) / 1000)); return seconds < 3 ? 'Updated now' : seconds < 60 ? `Updated ${seconds}s ago` : `Updated ${Math.floor(seconds / 60)}m ago`; };
 const phases: Record<TelemetryPhase, string> = { connecting: 'Connecting', reconnecting: 'Reconnecting', offline: 'Offline', notLoaded: 'No model', idle: 'Ready', queued: 'Queued', prefill: 'Reading context', decode: 'Generating', processing: 'Processing', unknown: 'Unavailable' };
-
-const updateSessionContext = (item: GuestItem | null): void => {
-  const session = isGuestSessionItem(item);
-  hidden('session-context', !session);
-  text('session-context-title', session ? item.sessionTitle : '');
-};
 
 const drawSignal = (now: number, live: boolean, phase: TelemetryPhase): void => {
   signal.prune(now);
@@ -121,15 +117,31 @@ const update = (snapshot: ReturnType<typeof parseTelemetrySnapshot>): void => {
   const liveRate = current?.phase === 'decode' ? current.liveDecodeTPS : current?.phase === 'prefill' ? current.livePrefillTPS : null;
   shell.dataset.phase = phase;
   shell.dataset.stale = String(stale);
-  text('connection', current ? current.phase === 'notLoaded' ? 'oMLX connected · no model loaded' : 'oMLX connected' : snapshot.reason === 'authentication_failed' ? 'Authentication required' : 'Waiting for oMLX');
+  const connection = current
+    ? current.phase === 'notLoaded' ? 'oMLX connected · no model loaded' : 'oMLX connected'
+    : snapshot.reason === 'authentication_failed'
+      ? 'Authentication required'
+      : snapshot.reason === 'service_not_granted'
+        ? 'Extension service approval required'
+        : snapshot.reason === 'service_failed' || snapshot.reason === 'host_disconnected'
+          ? 'OpenChamber service unavailable'
+          : 'Waiting for oMLX';
+  text('connection', connection);
   text('phase', phases[phase]);
-  text('model', display?.modelID?.split('/').at(-1) ?? 'Your local model');
+  text('model', display?.modelID ?? 'Your local model');
   node('model').title = display?.modelID ?? 'Load a model in oMLX to begin monitoring.';
   text('rate', liveRate !== null ? rateNumber.format(liveRate) : phase === 'idle' ? 'Ready' : phase === 'notLoaded' ? 'Standby' : '—');
   node('rate').classList.toggle('is-word', liveRate === null);
   text('unit', liveRate !== null ? 'tokens / second' : phase === 'idle' ? 'Waiting for your next request' : phase === 'notLoaded' ? 'Load a model in oMLX' : 'No fresh throughput');
-  text('activity', stale ? snapshot.message ?? 'Start oMLX on this host, then refresh.' : current.message ?? (phase === 'idle' ? 'Model resident. Nothing running.' : phase === 'notLoaded' ? 'Server is healthy. No model is resident.' : `${current.activeRequests} active · ${current.queuedRequests ? `${current.queuedRequests} queued` : 'queue clear'}`));
-  text('notice', stale ? last ? `${age(last.sampledAt)}. Retained details are not live.` : 'Read-only connection · check your local oMLX endpoint and credential.' : '');
+  const activity = current?.message ?? (phase === 'idle'
+    ? 'Model resident. Nothing running.'
+    : phase === 'notLoaded'
+      ? 'Server is healthy. No model is resident.'
+      : current?.activeRequests == null
+        ? 'Runtime activity count unavailable.'
+        : `${current.activeRequests} active · ${current.queuedRequests == null ? 'queue not reported' : current.queuedRequests ? `${current.queuedRequests} queued` : 'queue clear'}`);
+  text('activity', stale ? snapshot.message ?? 'Start oMLX on this host, then refresh.' : activity);
+  text('notice', stale ? last ? `${age(last.sampledAt)}. Retained telemetry is not live; refresh to reconnect.` : 'Read-only connection · check your local oMLX endpoint and credential.' : '');
   hidden('notice', !stale);
   const progress = current?.phase === 'prefill' ? current.prefillProgress : null;
   hidden('prefill-track', progress == null);
@@ -142,10 +154,13 @@ const update = (snapshot: ReturnType<typeof parseTelemetrySnapshot>): void => {
   text('context', percent(contextPercent)); text('context-detail', current?.promptTokens == null ? 'Not reported' : `${count(current.promptTokens)} / ${count(current.contextWindow)}`);
   text('reuse', percent(reusedPercent)); text('reuse-detail', current?.cachedTokens == null ? 'Not reported' : `${count(current.cachedTokens)} tokens`);
   meter('context-bar', contextPercent); meter('reuse-bar', reusedPercent);
-  text('requests', current ? String(current.activeRequests) : '—'); text('queue', current ? current.queuedRequests ? `${current.queuedRequests} queued` : 'Queue clear' : 'No live reading');
+  text('requests', current?.activeRequests == null ? '—' : String(current.activeRequests));
+  text('queue', current === null ? 'No live reading' : current.queuedRequests == null ? 'Queue not reported' : current.queuedRequests ? `${current.queuedRequests} queued` : 'Queue clear');
   text('average-decode', rate(display?.sessionAverageDecodeTPS)); text('average-prefill', rate(display?.sessionAveragePrefillTPS)); text('average-cache', percent(display?.sessionCacheEfficiencyPercent));
   const uptime = display?.lifetime?.uptimeSeconds;
-  text('uptime', uptime == null ? 'Since start / reset' : `${Math.floor(uptime / 3600)}h ${Math.floor(uptime % 3600 / 60)}m · since start`);
+  text('uptime', uptime == null
+    ? 'Runtime-wide · aggregate unavailable'
+    : `${Math.floor(uptime / 3600)}h ${Math.floor(uptime % 3600 / 60)}m · ${display?.sessionStatsState === 'stale' ? 'last successful read' : 'since start / reset'}`);
   text('process-memory', gb(display?.memory?.activeGB)); text('model-memory', gb(display?.memory?.modelGB)); text('cache-memory', gb(display?.memory?.cacheGB)); text('ssd-cache', gb(display?.sessionBank?.cold?.totalGB));
   text('pressure', display?.memoryPressureLevel == null ? 'Not reported' : ['Not reported', 'Normal', 'Elevated', 'Critical'][Math.min(3, display.memoryPressureLevel)] ?? 'Not reported');
   text('output', count(current?.completionTokens)); text('elapsed', current?.elapsedSeconds == null ? '—' : `${number.format(current.elapsedSeconds)}s`); text('cache-lookup', display?.sessionBank?.lastMissReason?.replaceAll('_', ' ') ?? 'Not reported');
@@ -164,14 +179,23 @@ const update = (snapshot: ReturnType<typeof parseTelemetrySnapshot>): void => {
 const poller = new Poller(async () => {
   try {
     const response = await host.serviceRequest({ method: 'GET', path: '/snapshot' });
-    const parsed = response.status === 200 ? parseTelemetrySnapshot(JSON.parse(response.body)) : unavailableTelemetry('runtime_unreachable', 'The local service could not read oMLX.');
+    const observedAt = Date.now();
+    const parsed = response.status === 200
+      ? (() => {
+        try {
+          return parseTelemetrySnapshot(JSON.parse(response.body), observedAt);
+        } catch {
+          return unavailableTelemetry('unparseable_snapshot', 'The local service returned an unreadable telemetry response.', observedAt);
+        }
+      })()
+      : unavailableForServiceResponse(response.status, observedAt);
     failures = parsed.available ? 0 : failures + 1;
-    update(parsed);
-  } catch {
+    if (!disposed) update(parsed);
+  } catch (error) {
     failures += 1;
-    update(unavailableTelemetry('runtime_unreachable', 'oMLX is not responding. Check the local server and extension service approval.'));
+    if (!disposed) update(unavailableForHostError(error, Date.now()));
   } finally {
-    if (manualRefresh) { button.disabled = false; button.removeAttribute('aria-busy'); manualRefresh = false; }
+    if (manualRefresh && !disposed) { button.disabled = false; button.removeAttribute('aria-busy'); manualRefresh = false; }
   }
   return nextDelay(last, failures);
 });
@@ -185,13 +209,11 @@ button.addEventListener('click', () => {
 host.onReady((ready) => {
   applyHostReady(ready, document.documentElement);
   document.documentElement.style.colorScheme = ready.theme.mode;
-  updateSessionContext(ready.item);
   if (mounted) return;
   mounted = true;
   poller.setPaused(document.hidden);
   poller.start();
 });
-host.onItem(updateSessionContext);
 document.addEventListener('visibilitychange', () => poller.setPaused(document.hidden));
-window.addEventListener('pagehide', (event) => { poller.stop(); if (!event.persisted) host.dispose(); });
-window.addEventListener('pageshow', (event) => { if (event.persisted && mounted) poller.start(); });
+window.addEventListener('pagehide', (event) => { disposed = true; poller.stop(); if (!event.persisted) host.dispose(); });
+window.addEventListener('pageshow', (event) => { if (event.persisted && mounted) { disposed = false; poller.start(); } });

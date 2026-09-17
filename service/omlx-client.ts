@@ -1,4 +1,4 @@
-import { normalizeOmlxTelemetry, unavailableTelemetry, type TelemetrySnapshot } from '../src/telemetry.ts';
+import { normalizeOmlxTelemetry, unavailableTelemetry, type TelemetrySnapshot, type TelemetryStatsState } from '../src/telemetry.ts';
 import { resolveOmlxConfig, type OmlxConfig } from './config.ts';
 
 type JsonObject = { readonly [key: string]: unknown };
@@ -44,10 +44,12 @@ const requestJSON = async ({
   url,
   init,
   fetchImpl,
+  timeoutMs = 3_000,
 }: {
   url: URL;
   init?: RequestInit;
   fetchImpl: FetchImplementation;
+  timeoutMs?: number;
 }): Promise<JsonResponse> => {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -103,7 +105,7 @@ const requestJSON = async ({
         timer = setTimeout(() => {
           controller.abort();
           reject(new OmlxFailure('runtime_unreachable', 'The oMLX request timed out.'));
-        }, 3_000);
+        }, Math.max(1, timeoutMs));
       }),
     ]);
   } catch (error) {
@@ -115,6 +117,10 @@ const requestJSON = async ({
 };
 
 const resettableConfig = (config: OmlxConfig): string => `${config.baseURL?.toString() ?? ''}\u0000${config.apiKey ?? ''}`;
+
+const isStatsPayload = (body: JsonObject | null): body is JsonObject => (
+  body !== null && asObject(body.engines) !== null && asObject(body.active_models) !== null
+);
 
 const isHealthy = (body: JsonObject | null): boolean => {
   const pool = asObject(body?.engine_pool);
@@ -137,6 +143,9 @@ export type OmlxClientOptions = {
   fetchImpl?: FetchImplementation;
   readConfig?: () => Promise<OmlxConfig>;
   now?: () => number;
+  monotonicNow?: () => number;
+  requestTimeoutMs?: number;
+  collectionDeadlineMs?: number;
 };
 
 /** Read-only oMLX client that keeps credentials and raw payloads in the service. */
@@ -144,9 +153,13 @@ export class OmlxClient {
   private readonly fetchImpl: FetchImplementation;
   private readonly readConfig: () => Promise<OmlxConfig>;
   private readonly now: () => number;
+  private readonly monotonicNow: () => number;
+  private readonly requestTimeoutMs: number;
+  private readonly collectionDeadlineMs: number;
   private configKey = '';
   private cookie: string | null = null;
   private stats: JsonObject | null = null;
+  private statsState: TelemetryStatsState = 'unavailable';
   private statsAt = Number.NEGATIVE_INFINITY;
   private identityAt = Number.NEGATIVE_INFINITY;
   private modelStatusAt = Number.NEGATIVE_INFINITY;
@@ -160,28 +173,33 @@ export class OmlxClient {
   private traceEpoch = 0;
   private prefill = new Map<string, { processed: number; changedAt: number }>();
 
-  constructor({ fetchImpl = globalThis.fetch, readConfig = resolveOmlxConfig, now = () => Date.now() }: OmlxClientOptions = {}) {
-    this.fetchImpl = fetchImpl;
-    this.readConfig = readConfig;
-    this.now = now;
+  constructor(options: OmlxClientOptions = {}) {
+    this.fetchImpl = options.fetchImpl ?? globalThis.fetch;
+    this.readConfig = options.readConfig ?? resolveOmlxConfig;
+    this.now = options.now ?? (() => Date.now());
+    this.monotonicNow = options.monotonicNow ?? (options.now ? options.now : () => performance.now());
+    this.requestTimeoutMs = options.requestTimeoutMs ?? 3_000;
+    this.collectionDeadlineMs = options.collectionDeadlineMs ?? 8_000;
   }
 
   snapshot(): Promise<TelemetrySnapshot> {
     if (this.inFlight) return this.inFlight;
-    if (this.lastSnapshot && this.now() - this.snapshotAt < 450) return Promise.resolve(this.lastSnapshot);
+    if (this.lastSnapshot && this.lastSnapshot.available && this.monotonicNow() - this.snapshotAt < 450) {
+      return Promise.resolve(this.lastSnapshot);
+    }
     this.inFlight = this.collect().catch(() => unavailableTelemetry('runtime_unreachable', 'Local telemetry is unavailable.'))
       .then((snapshot) => {
         this.lastSnapshot = snapshot;
-        this.snapshotAt = this.now();
+        this.snapshotAt = this.monotonicNow();
         return snapshot;
       }).finally(() => { this.inFlight = null; });
     return this.inFlight;
   }
 
   private async configuration(): Promise<OmlxConfig> {
-    if (this.config === null || this.now() - this.configAt >= 5_000) {
+    if (this.config === null || this.monotonicNow() - this.configAt >= 5_000) {
       this.config = await this.readConfig();
-      this.configAt = this.now();
+      this.configAt = this.monotonicNow();
     }
     return this.config;
   }
@@ -194,11 +212,12 @@ export class OmlxClient {
     if (config.apiKey === null) {
       return unavailableTelemetry('authentication_failed', 'No oMLX API credential was found in OpenCode auth.');
     }
-    const key = resettableConfig(config);
+    const key = `${resettableConfig(config)}\u0000${config.preferredModel ?? ''}`;
     if (key !== this.configKey) {
       this.configKey = key;
       this.cookie = null;
       this.stats = null;
+      this.statsState = 'unavailable';
       this.statsAt = Number.NEGATIVE_INFINITY;
       this.identityAt = Number.NEGATIVE_INFINITY;
       this.modelStatusAt = Number.NEGATIVE_INFINITY;
@@ -209,39 +228,69 @@ export class OmlxClient {
     }
 
     try {
-      const now = this.now();
-      if (now - this.identityAt >= 300_000) {
-        await this.verifyIdentity(config.baseURL);
-        this.identityAt = now;
+      const startedAt = this.monotonicNow();
+      const deadline = startedAt + this.collectionDeadlineMs;
+      const timeoutFor = (limit = this.requestTimeoutMs): number => {
+        const remaining = deadline - this.monotonicNow();
+        if (remaining <= 0) throw new OmlxFailure('runtime_unreachable', 'The oMLX snapshot deadline expired.');
+        return Math.max(1, Math.min(limit, remaining));
+      };
+      if (startedAt - this.identityAt >= 300_000) {
+        await this.verifyIdentity(config.baseURL, timeoutFor());
+        this.identityAt = this.monotonicNow();
       }
-      if (this.cookie === null) this.cookie = await this.login(config.baseURL, config.apiKey);
-      if (now - this.modelStatusAt >= 60_000) {
-        this.contextWindows = await this.readModelStatus(config.baseURL, config.apiKey);
-        this.modelStatusAt = now;
+      if (this.cookie === null) this.cookie = await this.login(config.baseURL, config.apiKey, timeoutFor());
+
+      const readStatus = this.monotonicNow() - this.modelStatusAt >= 60_000;
+      const readSessionStats = this.monotonicNow() - this.statsAt >= 3_000;
+      const activityPromise = this.readActivity(config.baseURL, this.cookie, timeoutFor());
+      const statusPromise = readStatus
+        ? this.readModelStatus(config.baseURL, config.apiKey, timeoutFor(Math.min(this.requestTimeoutMs, 1_000)))
+        : Promise.resolve(null);
+      const statsPromise = readSessionStats
+        ? this.readStats(config.baseURL, this.cookie, timeoutFor()).then(
+          (value) => ({ value, error: null as unknown }),
+          (error: unknown) => ({ value: null, error }),
+        )
+        : Promise.resolve(null);
+      const [activity, contextWindows, statsResult] = await Promise.all([activityPromise, statusPromise, statsPromise]);
+      if (readStatus && contextWindows !== null) {
+        this.contextWindows = contextWindows;
+        this.modelStatusAt = this.monotonicNow();
       }
-      if (now - this.statsAt >= 3_000) {
-        try {
-          this.stats = await this.readStats(config.baseURL, this.cookie);
-        } catch (error) {
-          if (error instanceof OmlxFailure && error.reason === 'authentication_failed') throw error;
-          this.stats = null;
+      if (readSessionStats && statsResult !== null) {
+        if (statsResult.error instanceof OmlxFailure && statsResult.error.reason === 'authentication_failed') {
+          throw statsResult.error;
         }
-        this.statsAt = now;
+        if (statsResult.value !== null) {
+          this.stats = statsResult.value;
+          this.statsState = 'fresh';
+        } else {
+          this.statsState = this.stats === null ? 'unavailable' : 'stale';
+        }
+        this.statsAt = this.monotonicNow();
       }
-      const activity = await this.readActivity(config.baseURL, this.cookie);
       this.observeProgress(activity);
       const normalized = normalizeOmlxTelemetry(
-        this.stats ?? { engines: {}, active_models: { models: [] } },
+        this.stats,
         activity,
         this.contextWindows,
         config.preferredModel,
         this.now(),
+        this.statsState,
       );
       if (normalized === null) {
         throw new OmlxFailure('runtime_unreachable', 'oMLX returned an unexpected telemetry shape.');
       }
-      return { ...normalized, traceEpoch: this.traceEpoch,
-        message: normalized.message ?? (this.stats === null ? 'Live activity connected · session statistics unavailable' : null) };
+      return {
+        ...normalized,
+        traceEpoch: this.traceEpoch,
+        message: normalized.message ?? (this.statsState === 'stale'
+          ? 'Live activity connected · session statistics are from the last successful read'
+          : this.statsState === 'unavailable'
+            ? 'Live activity connected · session statistics unavailable'
+            : null),
+      };
     } catch (error) {
       this.signalIdentity = '';
       this.traceEpoch += 1;
@@ -250,13 +299,19 @@ export class OmlxClient {
         if (error.reason === 'authentication_failed') {
           this.cookie = null;
           this.stats = null;
+          this.statsState = 'unavailable';
           this.statsAt = Number.NEGATIVE_INFINITY;
           this.configAt = Number.NEGATIVE_INFINITY;
+          this.identityAt = Number.NEGATIVE_INFINITY;
+        } else {
+          this.identityAt = Number.NEGATIVE_INFINITY;
         }
         return unavailableTelemetry(error.reason, error.message);
       }
       this.cookie = null;
       this.stats = null;
+      this.statsState = 'unavailable';
+      this.identityAt = Number.NEGATIVE_INFINITY;
       return unavailableTelemetry('runtime_unreachable', 'The oMLX telemetry request failed.');
     }
   }
@@ -264,6 +319,7 @@ export class OmlxClient {
   /** Observe only in service memory. No request identifiers cross the SDK. */
   private observeProgress(activity: JsonObject): void {
     const active = asObject(activity.active_models);
+    const observedAt = this.monotonicNow();
     const identities: string[] = [];
     const activePrefills = new Set<string>();
     for (const modelValue of Array.isArray(active?.models) ? active.models : []) {
@@ -280,8 +336,8 @@ export class OmlxClient {
           const processed = nonnegative(flight.processed);
           if (processed === null) continue;
           const previous = this.prefill.get(identity);
-          if (!previous || previous.processed !== processed) this.prefill.set(identity, { processed, changedAt: this.now() });
-          if (previous && previous.processed === processed && this.now() - previous.changedAt >= 15_000) {
+          if (!previous || previous.processed !== processed) this.prefill.set(identity, { processed, changedAt: observedAt });
+          if (previous && previous.processed === processed && observedAt - previous.changedAt >= 15_000) {
             (flight as Record<string, unknown>).progress_stale = true;
           }
         }
@@ -292,15 +348,11 @@ export class OmlxClient {
     if (identity !== this.signalIdentity) { this.traceEpoch += 1; this.signalIdentity = identity; }
   }
 
-  async capabilities(): Promise<{ configured: boolean; model: string | null }> {
-    const config = await this.configuration();
-    return { configured: config.baseURL !== null && config.apiKey !== null, model: config.preferredModel };
-  }
-
-  private async verifyIdentity(baseURL: URL): Promise<void> {
+  private async verifyIdentity(baseURL: URL, timeoutMs: number): Promise<void> {
     const response = await requestJSON({
       url: new URL('/health', baseURL),
       fetchImpl: this.fetchImpl,
+      timeoutMs,
       init: { method: 'GET', headers: { Accept: 'application/json' } },
     });
     if (!isHealthy(response.body)) {
@@ -308,10 +360,11 @@ export class OmlxClient {
     }
   }
 
-  private async login(baseURL: URL, apiKey: string): Promise<string> {
+  private async login(baseURL: URL, apiKey: string, timeoutMs: number): Promise<string> {
     const response = await requestJSON({
       url: new URL('/admin/api/login', baseURL),
       fetchImpl: this.fetchImpl,
+      timeoutMs,
       init: {
         method: 'POST',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
@@ -324,11 +377,12 @@ export class OmlxClient {
     return response.cookie;
   }
 
-  private async readModelStatus(baseURL: URL, apiKey: string): Promise<Map<string, number>> {
+  private async readModelStatus(baseURL: URL, apiKey: string, timeoutMs: number): Promise<Map<string, number>> {
     try {
       const response = await requestJSON({
         url: new URL('/v1/models/status', baseURL),
         fetchImpl: this.fetchImpl,
+        timeoutMs,
         init: { method: 'GET', headers: { Accept: 'application/json', Authorization: `Bearer ${apiKey}` } },
       });
       return parseContextWindows(response.body);
@@ -339,20 +393,21 @@ export class OmlxClient {
     }
   }
 
-  private async readStats(baseURL: URL, cookie: string): Promise<JsonObject> {
+  private async readStats(baseURL: URL, cookie: string, timeoutMs: number): Promise<JsonObject | null> {
     const response = await requestJSON({
       url: new URL('/admin/api/stats?scope=session', baseURL),
       fetchImpl: this.fetchImpl,
+      timeoutMs,
       init: { method: 'GET', headers: { Accept: 'application/json', Cookie: `omlx_admin_session=${cookie}` } },
     });
-    if (response.body === null) throw new OmlxFailure('runtime_unreachable', 'oMLX stats were empty.');
-    return response.body;
+    return isStatsPayload(response.body) ? response.body : null;
   }
 
-  private async readActivity(baseURL: URL, cookie: string): Promise<JsonObject> {
+  private async readActivity(baseURL: URL, cookie: string, timeoutMs: number): Promise<JsonObject> {
     const response = await requestJSON({
       url: new URL('/admin/api/activity', baseURL),
       fetchImpl: this.fetchImpl,
+      timeoutMs,
       init: { method: 'GET', headers: { Accept: 'application/json', Cookie: `omlx_admin_session=${cookie}` } },
     });
     if (response.body === null) throw new OmlxFailure('runtime_unreachable', 'oMLX activity was empty.');

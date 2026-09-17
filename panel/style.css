@@ -30,9 +30,6 @@ h1 span { font-weight: 400; color: var(--oc-muted); }
 .connection { justify-content: flex-start; gap: 7px; margin-top: 14px; font-size: 11px; color: var(--oc-muted); }
 .connection-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--scope-accent); }
 .local-tag { margin-left: auto; font: 9px var(--oc-mono, monospace); letter-spacing: .07em; white-space: nowrap; }
-.session-context { display: flex; align-items: baseline; gap: 8px; max-width: 100%; margin-top: 11px; color: var(--oc-muted); font-size: 10px; }
-.session-context-label { flex: none; color: var(--scope-blue); font: 9px var(--oc-mono, monospace); letter-spacing: .1em; }
-#session-context-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .notice { padding: 12px; margin-top: 16px; border-left: 2px solid var(--oc-warning-text); background: var(--scope-surface); color: var(--oc-muted); font-size: 11px; }
 .instrument { margin-top: 27px; }
 .eyebrow { font-size: 10px; font-weight: 600; letter-spacing: .13em; color: var(--oc-muted); }
