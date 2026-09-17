@@ -178,9 +178,6 @@ var require_main = __commonJS((exports, module) => {
   });
 });
 
-// service/main.ts
-import http from "node:http";
-
 // src/telemetry.ts
 var asObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value) ? value : null;
 var finite = (value) => typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -528,9 +525,11 @@ var defaultReadText = async (path) => {
     return error.code === "ENOENT" ? { kind: "missing" } : { kind: "unreadable" };
   }
 };
-var pathsForHome = (home, env = process.env) => {
-  const configHome = nonempty(env.XDG_CONFIG_HOME) ?? join(home, ".config");
-  const dataHome = nonempty(env.XDG_DATA_HOME) ?? join(home, ".local", "share");
+var pathsForHome = (home, env = {}) => {
+  const configRoot = nonempty(env.XDG_CONFIG_HOME);
+  const dataRoot = nonempty(env.XDG_DATA_HOME);
+  const configHome = configRoot && isAbsolute(configRoot) ? configRoot : join(home, ".config");
+  const dataHome = dataRoot && isAbsolute(dataRoot) ? dataRoot : join(home, ".local", "share");
   const openCodeHome = join(configHome, "opencode");
   return {
     openCode: join(openCodeHome, "opencode.json"),
@@ -576,8 +575,10 @@ var statusOf = (documents) => {
 };
 var has = (value, key) => value !== null && Object.prototype.hasOwnProperty.call(value, key);
 var merge = (base, overlay) => {
-  const result = { ...base };
+  const result = Object.assign(Object.create(null), base);
   for (const [key, value] of Object.entries(overlay)) {
+    if (["__proto__", "constructor", "prototype"].includes(key))
+      continue;
     const previous = asObject2(result[key]);
     const next = asObject2(value);
     result[key] = previous !== null && next !== null ? merge(previous, next) : value;
@@ -775,6 +776,8 @@ class OmlxClient {
   inFlight = null;
   lastSnapshot = null;
   snapshotAt = Number.NEGATIVE_INFINITY;
+  failures = 0;
+  retryAt = Number.NEGATIVE_INFINITY;
   config = null;
   configAt = Number.NEGATIVE_INFINITY;
   signalIdentity = "";
@@ -791,12 +794,15 @@ class OmlxClient {
   snapshot() {
     if (this.inFlight)
       return this.inFlight;
-    if (this.lastSnapshot && this.lastSnapshot.available && this.monotonicNow() - this.snapshotAt < 450) {
+    const age = this.monotonicNow() - this.snapshotAt;
+    if (this.lastSnapshot && age >= 0 && (age < 450 || !this.lastSnapshot.available && this.monotonicNow() < this.retryAt)) {
       return Promise.resolve(this.lastSnapshot);
     }
     this.inFlight = this.collect().catch(() => unavailableTelemetry("runtime_unreachable", "Local telemetry is unavailable.")).then((snapshot) => {
       this.lastSnapshot = snapshot;
       this.snapshotAt = this.monotonicNow();
+      this.failures = snapshot.available ? 0 : Math.min(5, this.failures + 1);
+      this.retryAt = snapshot.available ? Number.NEGATIVE_INFINITY : this.snapshotAt + Math.min(15000, 1000 * 2 ** (this.failures - 1));
       return snapshot;
     }).finally(() => {
       this.inFlight = null;
@@ -1007,38 +1013,182 @@ class OmlxClient {
 
 // service/system.ts
 import { cpus, freemem, totalmem, platform } from "node:os";
+
+// service/mac-memory.ts
+import { execFile } from "node:child_process";
+var MAC_SAMPLE_INTERVAL_MS = 1e4;
+var MAC_COMMAND_TIMEOUT_MS = 1500;
+var MAC_COMMAND_MAX_BYTES = 64 * 1024;
+var COMMANDS = [
+  ["/usr/bin/vm_stat", []],
+  ["/usr/sbin/sysctl", ["vm.swapusage"]]
+];
+var readNative = (file, args) => new Promise((resolve) => {
+  execFile(file, [...args], {
+    encoding: "utf8",
+    timeout: MAC_COMMAND_TIMEOUT_MS,
+    maxBuffer: MAC_COMMAND_MAX_BYTES,
+    killSignal: "SIGKILL",
+    windowsHide: true,
+    env: { LANG: "C", LC_ALL: "C" }
+  }, (error, stdout) => {
+    resolve(error ? null : stdout);
+  });
+});
+var bytesToGB = (value) => Number.isFinite(value) && value >= 0 && value <= Number.MAX_SAFE_INTEGER ? value / 1e9 : null;
+var parseVMStat = (output) => {
+  const pageSize = Number(/page size of (\d+) bytes/.exec(output ?? "")?.[1]);
+  const validPageSize = Number.isSafeInteger(pageSize) && pageSize >= 1024 && pageSize <= 65536 && (pageSize & pageSize - 1) === 0;
+  const pages = (label) => {
+    if (!validPageSize)
+      return null;
+    const match = new RegExp(`^${label}:\\s+(\\d+)\\.?(?:\\s|$)`, "m").exec(output ?? "");
+    return match ? bytesToGB(Number(match[1]) * pageSize) : null;
+  };
+  return { wiredGB: pages("Pages wired down"), compressedGB: pages("Pages occupied by compressor") };
+};
+var parseSysctlMemory = (output) => {
+  const swapLine = /^vm\.swapusage:\s*(.*)$/m.exec(output ?? "")?.[1] ?? "";
+  const used = /\bused\s*=\s*(\d+(?:\.\d+)?)\s*([KMGT])(?:\s|$)/.exec(swapLine);
+  const powers = { K: 1, M: 2, G: 3, T: 4 };
+  return {
+    swapUsedGB: used ? bytesToGB(Number(used[1]) * 1024 ** powers[used[2]]) : null
+  };
+};
+
+class MacMemorySampler {
+  read;
+  now;
+  cached = null;
+  pending = null;
+  constructor(read = readNative, now = Date.now) {
+    this.read = read;
+    this.now = now;
+  }
+  sample() {
+    if (this.pending)
+      return this.pending;
+    const age = this.cached ? this.now() - this.cached.sampledAt : Infinity;
+    if (this.cached && age >= 0 && age < MAC_SAMPLE_INTERVAL_MS)
+      return Promise.resolve(this.cached);
+    this.pending = Promise.all(COMMANDS.map(([file, args]) => Promise.resolve().then(() => this.read(file, args)).catch(() => null))).then(([vm, sysctl]) => {
+      this.cached = { ...parseVMStat(vm ?? null), ...parseSysctlMemory(sysctl ?? null), sampledAt: this.now() };
+      return this.cached;
+    }).finally(() => {
+      this.pending = null;
+    });
+    return this.pending;
+  }
+}
+
+// service/system.ts
 var cpuUsage = (previous, current) => {
   if (previous === null)
     return null;
   const total = current.total - previous.total;
   const idle = current.idle - previous.idle;
-  if (total <= 0 || idle < 0 || idle > total)
+  if (!Number.isFinite(total) || !Number.isFinite(idle) || total <= 0 || idle < 0 || idle > total)
     return null;
-  return Math.max(0, Math.min(100, (1 - idle / total) * 100));
+  return (1 - idle / total) * 100;
 };
 
 class SystemSampler {
+  options;
   previous = null;
   cached = null;
-  sample(now = Date.now()) {
-    if (this.cached && now - this.cached.sampledAt < 2000)
-      return this.cached;
-    const ticks = cpus().reduce((result, cpu) => ({
+  pending = null;
+  now;
+  native;
+  constructor(options = {}) {
+    this.options = options;
+    this.now = options.now ?? Date.now;
+    this.native = options.native ?? new MacMemorySampler(undefined, this.now);
+  }
+  sample() {
+    if (this.pending)
+      return this.pending;
+    const age = this.cached ? this.now() - this.cached.sampledAt : Infinity;
+    if (this.cached && age >= 0 && age < 2000)
+      return Promise.resolve(this.cached);
+    this.pending = this.collect(age).then((snapshot) => {
+      this.cached = snapshot;
+      return snapshot;
+    }).finally(() => {
+      this.pending = null;
+    });
+    return this.pending;
+  }
+  async collect(age) {
+    const hostPlatform = this.options.hostPlatform ?? platform();
+    const macOS = hostPlatform === "darwin" ? await this.native.sample().catch(() => null) : null;
+    const cores = (this.options.readCPUs ?? cpus)();
+    const ticks = cores.reduce((result, cpu) => ({
       idle: result.idle + cpu.times.idle,
       total: result.total + Object.values(cpu.times).reduce((sum, time) => sum + time, 0)
     }), { idle: 0, total: 0 });
-    const total = totalmem();
-    this.cached = {
-      platform: platform(),
-      cpuPercent: cpuUsage(this.previous, ticks),
-      memoryUsedGB: Math.max(0, total - freemem()) / 1e9,
-      memoryTotalGB: total / 1e9,
-      sampledAt: now
-    };
+    const total = (this.options.readTotal ?? totalmem)();
+    const free = (this.options.readFree ?? freemem)();
+    const validMemory = Number.isFinite(total) && total > 0 && Number.isFinite(free) && free >= 0 && free <= total;
+    const cpuPercent = cores.length > 0 && age >= 0 && age <= 1e4 ? cpuUsage(this.previous, ticks) : null;
     this.previous = ticks;
-    return this.cached;
+    return {
+      platform: hostPlatform,
+      cpuModel: cores[0]?.model.trim().slice(0, 80) || null,
+      logicalCores: cores.length || null,
+      cpuPercent,
+      memoryUsedGB: validMemory ? (total - free) / 1e9 : null,
+      memoryTotalGB: validMemory ? total / 1e9 : null,
+      macOS,
+      sampledAt: this.now()
+    };
   }
 }
+
+// service/server.ts
+import http from "node:http";
+var json = (response, status, body) => {
+  response.writeHead(status, { "Cache-Control": "no-store", "Content-Type": "application/json; charset=utf-8", "X-Content-Type-Options": "nosniff" });
+  response.end(JSON.stringify(body));
+};
+var createScopeServer = (token, sources) => {
+  if (!token)
+    throw new Error("A service token is required.");
+  return http.createServer((request, response) => {
+    const handle = async () => {
+      const url = new URL(request.url ?? "/", "http://127.0.0.1");
+      if (request.headers.authorization !== `Bearer ${token}`) {
+        json(response, 401, { error: "unauthorized" });
+        return;
+      }
+      if (request.method !== "GET") {
+        json(response, 405, { error: "method_not_allowed" });
+        return;
+      }
+      if (url.pathname === "/health") {
+        json(response, 200, { status: "healthy" });
+        return;
+      }
+      if (url.pathname === "/snapshot") {
+        const [runtime, system] = await Promise.allSettled([
+          Promise.resolve().then(sources.snapshot),
+          Promise.resolve().then(sources.system)
+        ]);
+        json(response, 200, {
+          ...runtime.status === "fulfilled" ? runtime.value : unavailableTelemetry("runtime_unreachable", "Local inference telemetry is unavailable."),
+          system: system.status === "fulfilled" ? system.value : null
+        });
+        return;
+      }
+      json(response, 404, { error: "not_found" });
+    };
+    handle().catch(() => {
+      if (!response.headersSent)
+        json(response, 503, { error: "service_unavailable" });
+      else
+        response.end();
+    });
+  });
+};
 
 // service/main.ts
 var port = Number(process.env.OPENCHAMBER_SERVICE_PORT);
@@ -1047,41 +1197,14 @@ if (!Number.isInteger(port) || port < 1 || port > 65535 || token.length === 0) {
   console.error("OpenChamber service port and token are required.");
   process.exit(1);
 }
-var json = (response, status, body) => {
-  response.statusCode = status;
-  response.setHeader("Cache-Control", "no-store");
-  response.setHeader("Content-Type", "application/json; charset=utf-8");
-  response.end(JSON.stringify(body));
-};
-var authorized = (request) => request.headers.authorization === `Bearer ${token}`;
 var client = new OmlxClient;
 var system = new SystemSampler;
-var server = http.createServer((request, response) => {
-  (async () => {
-    try {
-      if (!authorized(request)) {
-        json(response, 401, { error: "unauthorized" });
-        return;
-      }
-      const url = new URL(request.url ?? "/", "http://127.0.0.1");
-      if (request.method === "GET" && url.pathname === "/health") {
-        json(response, 200, { status: "healthy" });
-        return;
-      }
-      if (request.method === "GET" && url.pathname === "/snapshot") {
-        json(response, 200, { ...await client.snapshot(), system: system.sample() });
-        return;
-      }
-      json(response, 404, { error: "not_found" });
-    } catch (error) {
-      console.error(`OMLX Scope service request failed: ${error instanceof Error ? error.message : String(error)}`);
-      if (!response.headersSent)
-        json(response, 503, { error: "service_failed" });
-    }
-  })();
+var server = createScopeServer(token, {
+  snapshot: () => client.snapshot(),
+  system: () => system.sample()
 });
-server.on("error", (error) => {
-  console.error(`OMLX Scope service stopped: ${error instanceof Error ? error.message : String(error)}`);
+server.on("error", () => {
+  console.error("OMLX Scope could not start its local service.");
   process.exitCode = 1;
 });
 var stopping = false;
@@ -1089,12 +1212,11 @@ var stop = () => {
   if (stopping)
     return;
   stopping = true;
-  const forceExit = setTimeout(() => process.exit(1), 1000);
-  forceExit.unref();
-  server.close(() => {
-    clearTimeout(forceExit);
+  server.close(() => process.exit(0));
+  setTimeout(() => {
+    server.closeAllConnections();
     process.exit(0);
-  });
+  }, 2000).unref();
 };
 process.once("SIGTERM", stop);
 process.once("SIGINT", stop);
