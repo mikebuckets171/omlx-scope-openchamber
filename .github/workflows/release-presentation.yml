@@ -1,0 +1,45 @@
+name: Update release presentation
+on:
+  push:
+    branches: [improve/resource-monitor]
+    paths: [.github/workflows/release-presentation.yml]
+permissions:
+  contents: write
+jobs:
+  update:
+    if: github.repository == 'mikebuckets171/omlx-scope-openchamber' && github.ref == 'refs/heads/improve/resource-monitor'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update release title and notes without changing assets or tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint='repos/mikebuckets171/omlx-scope-openchamber/releases/391051259'
+          test "$(gh api "$endpoint" --jq .tag_name)" = 'v0.4.1'
+          python3 - <<'PY' > /tmp/release-presentation.json
+          import json
+          body = '''Read-only oMLX monitoring for OpenChamber.
+
+          ## Improvements
+
+          - JSONC configuration support and clearer connection diagnostics.
+          - More accurate handling of incomplete activity and older session statistics.
+          - Bounded requests and more reliable refresh behavior.
+          - Installable ZIP packaging and expanded automated checks.
+
+          ## Installation
+
+          Download `omlx-scope-openchamber-0.4.1.zip` below and add it in **Settings → Extensions** in OpenChamber 1.24.0 or newer.
+
+          ## Compatibility
+
+          This version targets the oMLX 0.7.0.dev3 monitoring endpoint shapes. Other versions may differ. Readings cover the oMLX server, not verified activity for an individual chat. Live OpenChamber/oMLX hardware validation has not been completed for this release.
+          '''
+          # Strip the YAML indentation retained inside the literal.
+          import textwrap
+          body = '\n'.join(line[10:] if line.startswith(' ' * 10) else line for line in body.splitlines()).strip() + '\n'
+          json.dump({'name': 'OMLX Scope v0.4.1', 'body': body}, __import__('sys').stdout)
+          PY
+          gh api --method PATCH "$endpoint" --input /tmp/release-presentation.json --jq '{tag_name, name, html_url}'
