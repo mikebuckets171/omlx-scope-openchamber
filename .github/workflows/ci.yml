@@ -23,3 +23,12 @@ jobs:
         run: bun run check
       - name: Ensure generated bundles are current
         run: git diff --exit-code -- panel/main.js service/main.js
+      - name: Archive verified source
+        run: git archive --format=zip --output=omlx-scope-source.zip HEAD
+      - name: Upload verified source
+        uses: actions/upload-artifact@v4
+        with:
+          name: omlx-scope-source
+          path: omlx-scope-source.zip
+          retention-days: 7
+          if-no-files-found: error
