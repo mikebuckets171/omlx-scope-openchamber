@@ -1,5 +1,182 @@
-// service/main.ts
-import http from "node:http";
+import { createRequire } from "node:module";
+var __create = Object.create;
+var __getProtoOf = Object.getPrototypeOf;
+var __defProp = Object.defineProperty;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+function __accessProp(key) {
+  return this[key];
+}
+var __toESMCache_node;
+var __toESMCache_esm;
+var __toESM = (mod, isNodeMode, target) => {
+  var canCache = mod != null && typeof mod === "object";
+  if (canCache) {
+    var cache = isNodeMode ? __toESMCache_node ??= new WeakMap : __toESMCache_esm ??= new WeakMap;
+    var cached = cache.get(mod);
+    if (cached)
+      return cached;
+  }
+  target = mod != null ? __create(__getProtoOf(mod)) : {};
+  const to = isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target;
+  for (let key of __getOwnPropNames(mod))
+    if (!__hasOwnProp.call(to, key))
+      __defProp(to, key, {
+        get: __accessProp.bind(mod, key),
+        enumerable: true
+      });
+  if (canCache)
+    cache.set(mod, to);
+  return to;
+};
+var __commonJS = (cb, mod) => () => (mod || cb((mod = { exports: {} }).exports, mod), mod.exports);
+var __require = /* @__PURE__ */ createRequire(import.meta.url);
+
+// node_modules/jsonc-parser/lib/umd/main.js
+var require_main = __commonJS((exports, module) => {
+  (function(factory) {
+    if (typeof module === "object" && typeof module.exports === "object") {
+      var v = factory(__require, exports);
+      if (v !== undefined)
+        module.exports = v;
+    } else if (typeof define === "function" && define.amd) {
+      define(["require", "exports", "./impl/format", "./impl/edit", "./impl/scanner", "./impl/parser"], factory);
+    }
+  })(function(require2, exports2) {
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.applyEdits = exports2.modify = exports2.format = exports2.printParseErrorCode = exports2.ParseErrorCode = exports2.stripComments = exports2.visit = exports2.getNodeValue = exports2.getNodePath = exports2.findNodeAtOffset = exports2.findNodeAtLocation = exports2.parseTree = exports2.parse = exports2.getLocation = exports2.SyntaxKind = exports2.ScanError = exports2.createScanner = undefined;
+    const formatter = require2("./impl/format");
+    const edit = require2("./impl/edit");
+    const scanner = require2("./impl/scanner");
+    const parser = require2("./impl/parser");
+    exports2.createScanner = scanner.createScanner;
+    var ScanError;
+    (function(ScanError2) {
+      ScanError2[ScanError2["None"] = 0] = "None";
+      ScanError2[ScanError2["UnexpectedEndOfComment"] = 1] = "UnexpectedEndOfComment";
+      ScanError2[ScanError2["UnexpectedEndOfString"] = 2] = "UnexpectedEndOfString";
+      ScanError2[ScanError2["UnexpectedEndOfNumber"] = 3] = "UnexpectedEndOfNumber";
+      ScanError2[ScanError2["InvalidUnicode"] = 4] = "InvalidUnicode";
+      ScanError2[ScanError2["InvalidEscapeCharacter"] = 5] = "InvalidEscapeCharacter";
+      ScanError2[ScanError2["InvalidCharacter"] = 6] = "InvalidCharacter";
+    })(ScanError || (exports2.ScanError = ScanError = {}));
+    var SyntaxKind;
+    (function(SyntaxKind2) {
+      SyntaxKind2[SyntaxKind2["OpenBraceToken"] = 1] = "OpenBraceToken";
+      SyntaxKind2[SyntaxKind2["CloseBraceToken"] = 2] = "CloseBraceToken";
+      SyntaxKind2[SyntaxKind2["OpenBracketToken"] = 3] = "OpenBracketToken";
+      SyntaxKind2[SyntaxKind2["CloseBracketToken"] = 4] = "CloseBracketToken";
+      SyntaxKind2[SyntaxKind2["CommaToken"] = 5] = "CommaToken";
+      SyntaxKind2[SyntaxKind2["ColonToken"] = 6] = "ColonToken";
+      SyntaxKind2[SyntaxKind2["NullKeyword"] = 7] = "NullKeyword";
+      SyntaxKind2[SyntaxKind2["TrueKeyword"] = 8] = "TrueKeyword";
+      SyntaxKind2[SyntaxKind2["FalseKeyword"] = 9] = "FalseKeyword";
+      SyntaxKind2[SyntaxKind2["StringLiteral"] = 10] = "StringLiteral";
+      SyntaxKind2[SyntaxKind2["NumericLiteral"] = 11] = "NumericLiteral";
+      SyntaxKind2[SyntaxKind2["LineCommentTrivia"] = 12] = "LineCommentTrivia";
+      SyntaxKind2[SyntaxKind2["BlockCommentTrivia"] = 13] = "BlockCommentTrivia";
+      SyntaxKind2[SyntaxKind2["LineBreakTrivia"] = 14] = "LineBreakTrivia";
+      SyntaxKind2[SyntaxKind2["Trivia"] = 15] = "Trivia";
+      SyntaxKind2[SyntaxKind2["Unknown"] = 16] = "Unknown";
+      SyntaxKind2[SyntaxKind2["EOF"] = 17] = "EOF";
+    })(SyntaxKind || (exports2.SyntaxKind = SyntaxKind = {}));
+    exports2.getLocation = parser.getLocation;
+    exports2.parse = parser.parse;
+    exports2.parseTree = parser.parseTree;
+    exports2.findNodeAtLocation = parser.findNodeAtLocation;
+    exports2.findNodeAtOffset = parser.findNodeAtOffset;
+    exports2.getNodePath = parser.getNodePath;
+    exports2.getNodeValue = parser.getNodeValue;
+    exports2.visit = parser.visit;
+    exports2.stripComments = parser.stripComments;
+    var ParseErrorCode;
+    (function(ParseErrorCode2) {
+      ParseErrorCode2[ParseErrorCode2["InvalidSymbol"] = 1] = "InvalidSymbol";
+      ParseErrorCode2[ParseErrorCode2["InvalidNumberFormat"] = 2] = "InvalidNumberFormat";
+      ParseErrorCode2[ParseErrorCode2["PropertyNameExpected"] = 3] = "PropertyNameExpected";
+      ParseErrorCode2[ParseErrorCode2["ValueExpected"] = 4] = "ValueExpected";
+      ParseErrorCode2[ParseErrorCode2["ColonExpected"] = 5] = "ColonExpected";
+      ParseErrorCode2[ParseErrorCode2["CommaExpected"] = 6] = "CommaExpected";
+      ParseErrorCode2[ParseErrorCode2["CloseBraceExpected"] = 7] = "CloseBraceExpected";
+      ParseErrorCode2[ParseErrorCode2["CloseBracketExpected"] = 8] = "CloseBracketExpected";
+      ParseErrorCode2[ParseErrorCode2["EndOfFileExpected"] = 9] = "EndOfFileExpected";
+      ParseErrorCode2[ParseErrorCode2["InvalidCommentToken"] = 10] = "InvalidCommentToken";
+      ParseErrorCode2[ParseErrorCode2["UnexpectedEndOfComment"] = 11] = "UnexpectedEndOfComment";
+      ParseErrorCode2[ParseErrorCode2["UnexpectedEndOfString"] = 12] = "UnexpectedEndOfString";
+      ParseErrorCode2[ParseErrorCode2["UnexpectedEndOfNumber"] = 13] = "UnexpectedEndOfNumber";
+      ParseErrorCode2[ParseErrorCode2["InvalidUnicode"] = 14] = "InvalidUnicode";
+      ParseErrorCode2[ParseErrorCode2["InvalidEscapeCharacter"] = 15] = "InvalidEscapeCharacter";
+      ParseErrorCode2[ParseErrorCode2["InvalidCharacter"] = 16] = "InvalidCharacter";
+    })(ParseErrorCode || (exports2.ParseErrorCode = ParseErrorCode = {}));
+    function printParseErrorCode(code) {
+      switch (code) {
+        case 1:
+          return "InvalidSymbol";
+        case 2:
+          return "InvalidNumberFormat";
+        case 3:
+          return "PropertyNameExpected";
+        case 4:
+          return "ValueExpected";
+        case 5:
+          return "ColonExpected";
+        case 6:
+          return "CommaExpected";
+        case 7:
+          return "CloseBraceExpected";
+        case 8:
+          return "CloseBracketExpected";
+        case 9:
+          return "EndOfFileExpected";
+        case 10:
+          return "InvalidCommentToken";
+        case 11:
+          return "UnexpectedEndOfComment";
+        case 12:
+          return "UnexpectedEndOfString";
+        case 13:
+          return "UnexpectedEndOfNumber";
+        case 14:
+          return "InvalidUnicode";
+        case 15:
+          return "InvalidEscapeCharacter";
+        case 16:
+          return "InvalidCharacter";
+      }
+      return "<unknown ParseErrorCode>";
+    }
+    exports2.printParseErrorCode = printParseErrorCode;
+    function format(documentText, range, options) {
+      return formatter.format(documentText, range, options);
+    }
+    exports2.format = format;
+    function modify(text2, path, value, options) {
+      return edit.setProperty(text2, path, value, options);
+    }
+    exports2.modify = modify;
+    function applyEdits(text2, edits) {
+      let sortedEdits = edits.slice(0).sort((a, b) => {
+        const diff = a.offset - b.offset;
+        if (diff === 0) {
+          return a.length - b.length;
+        }
+        return diff;
+      });
+      let lastModifiedOffset = text2.length;
+      for (let i = sortedEdits.length - 1;i >= 0; i--) {
+        let e = sortedEdits[i];
+        if (e.offset + e.length <= lastModifiedOffset) {
+          text2 = edit.applyEdit(text2, e);
+        } else {
+          throw new Error("Overlapping edit");
+        }
+        lastModifiedOffset = e.offset;
+      }
+      return text2;
+    }
+    exports2.applyEdits = applyEdits;
+  });
+});
 
 // src/telemetry.ts
 var asObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value) ? value : null;
@@ -29,10 +206,9 @@ var gb = (value) => {
 var emptyFields = (sampledAt) => ({
   message: null,
   runtime: null,
-  backendID: null,
   modelID: null,
   phase: "unknown",
-  apiKeyRequired: null,
+  sessionStatsState: "unavailable",
   sessionAveragePrefillTPS: null,
   liveDecodeTPS: null,
   livePrefillTPS: null,
@@ -43,12 +219,11 @@ var emptyFields = (sampledAt) => ({
   completionTokens: null,
   prefillProgress: null,
   elapsedSeconds: null,
-  activeRequests: 0,
-  queuedRequests: 0,
+  activeRequests: null,
+  queuedRequests: null,
   contextWindow: null,
   memory: null,
   sessionBank: null,
-  scheduler: null,
   lifetime: null,
   memoryPressureLevel: null,
   memoryPressureSource: null,
@@ -64,11 +239,34 @@ var unavailableTelemetry = (reason, message = null, sampledAt = Date.now()) => (
 });
 var arrayOfObjects = (value) => Array.isArray(value) ? value.map(asObject).filter((item) => item !== null) : [];
 var matchingModel = (models, preferredModel) => models.find((model) => Array.isArray(model.generating) && model.generating.length > 0) ?? models.find((model) => Array.isArray(model.prefilling) && model.prefilling.length > 0) ?? models.find((model) => (nonnegative(model.active_requests) ?? 0) > 0) ?? models.find((model) => model.is_loading === true) ?? (preferredModel === null ? undefined : models.find((model) => model.id === preferredModel)) ?? models[0] ?? null;
-var normalizeFlights = (model, lookup) => {
+var normalizeFlights = (model, lookup, ambiguous = false) => {
   if (model === null) {
     return {
       phase: "idle",
       message: null,
+      liveDecodeTPS: null,
+      livePrefillTPS: null,
+      promptTokens: null,
+      cachedTokens: null,
+      completionTokens: null,
+      prefillProgress: null,
+      elapsedSeconds: null,
+      processingElapsed: null
+    };
+  }
+  const hasStateEvidence = [
+    "active_requests",
+    "waiting_requests",
+    "prefilling",
+    "generating",
+    "waiting",
+    "activities",
+    "is_loading"
+  ].some((key) => Object.prototype.hasOwnProperty.call(model, key));
+  if (!hasStateEvidence) {
+    return {
+      phase: "unknown",
+      message: "Model state unavailable · waiting for a complete runtime sample",
       liveDecodeTPS: null,
       livePrefillTPS: null,
       promptTokens: null,
@@ -91,6 +289,9 @@ var normalizeFlights = (model, lookup) => {
     elapsedSeconds: null,
     processingElapsed: nonnegative(model.loading_elapsed_seconds)
   };
+  if (ambiguous) {
+    return { ...summary, phase: "processing", message: "Concurrent requests or models · per-request values withheld" };
+  }
   const waiting = arrayOfObjects(model.waiting);
   const prefilling = arrayOfObjects(model.prefilling);
   const generatingFlights = arrayOfObjects(model.generating);
@@ -165,7 +366,9 @@ var normalizeFlights = (model, lookup) => {
   return summary;
 };
 var normalizeWaiting = (models, active) => {
-  const reported = nonnegative(active.total_waiting_requests) ?? models.reduce((total, model) => total + (nonnegative(model.waiting_requests) ?? 0), 0);
+  const reported = nonnegative(active.total_waiting_requests) ?? (models.length === 0 ? 0 : models.every((model) => nonnegative(model.waiting_requests) !== null) ? models.reduce((total, model) => total + nonnegative(model.waiting_requests), 0) : null);
+  if (reported === null)
+    return null;
   let overlap = 0;
   for (const model of models) {
     const activeIDs = new Set;
@@ -192,7 +395,7 @@ var normalizeMemory = (active, model, cache) => ({
 });
 var normalizeSessionBank = (cache, lookup) => {
   const cold = asObject(cache.cold_tier);
-  return {
+  const bank = {
     hot: {
       totalGB: gb(cache.hot_cache_size_bytes),
       entries: firstNumber(cache.hot_cache_entries)
@@ -203,20 +406,28 @@ var normalizeSessionBank = (cache, lookup) => {
     },
     lastMissReason: text(lookup.reason)
   };
+  return [
+    bank.hot?.totalGB,
+    bank.hot?.entries,
+    bank.cold?.totalGB,
+    bank.cold?.entries,
+    bank.lastMissReason
+  ].some((value) => value !== null && value !== undefined) ? bank : null;
 };
-var normalizeLifetime = (stats) => ({
-  requestsTotal: firstNumber(stats.total_requests),
-  promptTokensTotal: firstNumber(stats.total_prompt_tokens),
-  completionTokensTotal: firstNumber(stats.total_completion_tokens),
-  cachedTokensTotal: firstNumber(stats.total_cached_tokens),
-  uptimeSeconds: firstNumber(stats.uptime_seconds)
-});
-var normalizeOmlxTelemetry = (statsValue, activityValue, contextWindows = new Map, preferredModel = null, sampledAt = Date.now()) => {
+var normalizeLifetime = (stats) => {
+  const lifetime = {
+    requestsTotal: firstNumber(stats.total_requests),
+    promptTokensTotal: firstNumber(stats.total_prompt_tokens),
+    completionTokensTotal: firstNumber(stats.total_completion_tokens),
+    cachedTokensTotal: firstNumber(stats.total_cached_tokens),
+    uptimeSeconds: firstNumber(stats.uptime_seconds)
+  };
+  return Object.values(lifetime).some((value) => value !== null) ? lifetime : null;
+};
+var normalizeOmlxTelemetry = (statsValue, activityValue, contextWindows = new Map, preferredModel = null, sampledAt = Date.now(), sessionStatsState = "fresh") => {
   const stats = asObject(statsValue);
   const savedActive = stats === null ? null : asObject(stats.active_models);
-  if (stats === null || savedActive === null || asObject(stats.engines) === null) {
-    return null;
-  }
+  const statsAreUsable = stats !== null && savedActive !== null && asObject(stats.engines) !== null;
   let active = savedActive;
   if (activityValue !== null) {
     const activity = asObject(activityValue);
@@ -225,16 +436,19 @@ var normalizeOmlxTelemetry = (statsValue, activityValue, contextWindows = new Ma
       return null;
     active = freshActive;
   }
-  if (!Array.isArray(active.models))
+  if (active === null || !Array.isArray(active.models))
     return null;
   const models = arrayOfObjects(active.models);
   const model = matchingModel(models, preferredModel);
   const modelID = text(model?.id);
-  const cache = asObject(stats.runtime_cache) ?? {};
+  const activeRequests = models.length === 0 ? 0 : nonnegative(active.total_active_requests) ?? (models.every((item) => nonnegative(item.active_requests) !== null) ? models.reduce((total, item) => total + nonnegative(item.active_requests), 0) : null);
+  const activeModelCount = models.filter((item) => arrayOfObjects(item.prefilling).length + arrayOfObjects(item.generating).length > 0 || (nonnegative(item.active_requests) ?? 0) > 0).length;
+  const ambiguous = activeModelCount > 1 || activeRequests !== null && activeRequests > 1;
+  const statsData = statsAreUsable ? stats : {};
+  const cache = asObject(statsData.runtime_cache) ?? {};
   const modelCache = arrayOfObjects(cache.models).find((candidate) => text(candidate.id) === modelID) ?? {};
   const lookup = asObject(modelCache.last_prefix_lookup) ?? {};
-  const flight = normalizeFlights(model, lookup);
-  const activeRequests = nonnegative(active.total_active_requests) ?? models.reduce((total, item) => total + (nonnegative(item.active_requests) ?? 0), 0);
+  const flight = normalizeFlights(model, lookup, ambiguous);
   const queuedRequests = normalizeWaiting(models, active);
   const pressure = asObject(active.memory_pressure);
   const pressureName = text(pressure?.pressure_level);
@@ -246,27 +460,20 @@ var normalizeOmlxTelemetry = (statsValue, activityValue, contextWindows = new Ma
     entries: cache.total_num_files
   };
   const sessionBank = normalizeSessionBank({ ...cache, cold_tier: coldTier }, lookup);
-  const scheduler = {
-    mode: "oMLX",
-    preset: null,
-    lane: null,
-    queuedRequests
-  };
   const memory = normalizeMemory(active, model, cache);
   return {
     available: true,
     reason: null,
     message: flight.message,
     runtime: "omlx",
-    backendID: "omlx",
     modelID,
-    phase: models.length === 0 ? "notLoaded" : flight.phase === "idle" && queuedRequests > 0 ? "queued" : flight.phase,
-    apiKeyRequired: true,
-    sessionAveragePrefillTPS: firstNumber(stats.avg_prefill_tps),
+    phase: models.length === 0 ? "notLoaded" : flight.phase === "idle" && queuedRequests !== null && queuedRequests > 0 ? "queued" : flight.phase,
+    sessionStatsState,
+    sessionAveragePrefillTPS: firstNumber(statsData.avg_prefill_tps),
     liveDecodeTPS: flight.liveDecodeTPS,
     livePrefillTPS: flight.livePrefillTPS,
-    sessionAverageDecodeTPS: firstNumber(stats.avg_generation_tps),
-    sessionCacheEfficiencyPercent: firstNumber(stats.cache_efficiency),
+    sessionAverageDecodeTPS: firstNumber(statsData.avg_generation_tps),
+    sessionCacheEfficiencyPercent: firstNumber(statsData.cache_efficiency),
     promptTokens: flight.promptTokens,
     cachedTokens: flight.cachedTokens,
     completionTokens: flight.completionTokens,
@@ -277,8 +484,7 @@ var normalizeOmlxTelemetry = (statsValue, activityValue, contextWindows = new Ma
     contextWindow: modelID === null ? null : contextWindows.get(modelID) ?? null,
     memory,
     sessionBank,
-    scheduler,
-    lifetime: normalizeLifetime(stats),
+    lifetime: sessionStatsState === "unavailable" && !statsAreUsable ? null : normalizeLifetime(statsData),
     memoryPressureLevel: pressureLevel,
     memoryPressureSource: pressureLevel === null ? null : "oMLX process memory guard (not macOS pressure)",
     sampledAt,
@@ -288,9 +494,10 @@ var normalizeOmlxTelemetry = (statsValue, activityValue, contextWindows = new Ma
 };
 
 // service/config.ts
+var import_jsonc_parser = __toESM(require_main(), 1);
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 var asObject2 = (value) => value !== null && typeof value === "object" && !Array.isArray(value) ? value : null;
 var nonempty = (value) => {
   if (typeof value !== "string")
@@ -298,29 +505,37 @@ var nonempty = (value) => {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
 };
+var normalizeReadText = (content) => {
+  if (typeof content === "string")
+    return { kind: "ok", text: content };
+  return content ?? { kind: "missing" };
+};
 var readJson = async (path, readText) => {
-  const content = await readText(path);
-  if (content === null)
-    return null;
-  try {
-    return asObject2(JSON.parse(content));
-  } catch {
-    return null;
-  }
+  const content = normalizeReadText(await readText(path));
+  if (content.kind !== "ok")
+    return { status: content.kind, value: null };
+  const errors = [];
+  const value = asObject2(import_jsonc_parser.parse(content.text, errors, { allowTrailingComma: true }));
+  return errors.length === 0 && value !== null ? { status: "ok", value } : { status: "malformed", value: null };
 };
 var defaultReadText = async (path) => {
   try {
-    return await readFile(path, "utf8");
-  } catch {
-    return null;
+    return { kind: "ok", text: await readFile(path, "utf8") };
+  } catch (error) {
+    return error.code === "ENOENT" ? { kind: "missing" } : { kind: "unreadable" };
   }
 };
-var pathsForHome = (home, env = process.env) => {
-  const configHome = nonempty(env.XDG_CONFIG_HOME) ?? join(home, ".config");
+var pathsForHome = (home, env = {}) => {
+  const configRoot = nonempty(env.XDG_CONFIG_HOME);
+  const dataRoot = nonempty(env.XDG_DATA_HOME);
+  const configHome = configRoot && isAbsolute(configRoot) ? configRoot : join(home, ".config");
+  const dataHome = dataRoot && isAbsolute(dataRoot) ? dataRoot : join(home, ".local", "share");
+  const openCodeHome = join(configHome, "opencode");
   return {
-    openCode: join(configHome, "opencode", "opencode.json"),
+    openCode: join(openCodeHome, "opencode.json"),
+    openCodeJSONC: join(openCodeHome, "opencode.jsonc"),
     omlx: join(home, ".omlx", "settings.json"),
-    auth: join(home, ".local", "share", "opencode", "auth.json")
+    auth: join(dataHome, "opencode", "auth.json")
   };
 };
 var parseLoopbackOrigin = (value, stripPath = false) => {
@@ -337,7 +552,7 @@ var parseLoopbackOrigin = (value, stripPath = false) => {
     return null;
   if (url.username || url.password || url.search || url.hash)
     return null;
-  if (!stripPath && url.pathname !== "" && url.pathname !== "/")
+  if (url.pathname !== "" && url.pathname !== "/" && (!stripPath || !["/v1", "/v1/"].includes(url.pathname)))
     return null;
   url.pathname = "/";
   url.search = "";
@@ -349,14 +564,35 @@ var providerOptions = (config) => {
   const omlx = asObject2(providers?.omlx);
   return asObject2(omlx?.options);
 };
+var statusOf = (documents) => {
+  if (documents.some((document) => document.status === "malformed"))
+    return "malformed";
+  if (documents.some((document) => document.status === "unreadable"))
+    return "unreadable";
+  if (documents.some((document) => document.status === "ok"))
+    return "present";
+  return "missing";
+};
+var has = (value, key) => value !== null && Object.prototype.hasOwnProperty.call(value, key);
+var merge = (base, overlay) => {
+  const result = Object.assign(Object.create(null), base);
+  for (const [key, value] of Object.entries(overlay)) {
+    if (["__proto__", "constructor", "prototype"].includes(key))
+      continue;
+    const previous = asObject2(result[key]);
+    const next = asObject2(value);
+    result[key] = previous !== null && next !== null ? merge(previous, next) : value;
+  }
+  return result;
+};
 var selectedOmlxModel = (config, env) => {
   const configured = nonempty(env.OMLX_SCOPE_MODEL);
-  if (configured !== null)
-    return configured;
-  const model = nonempty(config?.model);
+  const model = configured ?? nonempty(config?.model);
   if (model === null)
     return null;
   const [provider, ...rest] = model.split("/");
+  if (configured !== null)
+    return provider === "omlx" && rest.length > 0 ? rest.join("/") : configured;
   return provider === "omlx" && rest.length > 0 ? rest.join("/") : null;
 };
 var nativeEndpoint = (settings) => {
@@ -367,24 +603,46 @@ var nativeEndpoint = (settings) => {
 };
 var resolveOmlxConfig = async ({ env = process.env, home = env.HOME ?? homedir(), readText = defaultReadText } = {}) => {
   const paths = pathsForHome(home, env);
-  const [openCode, omlx, auth] = await Promise.all([
-    readJson(paths.openCode, readText),
-    readJson(paths.omlx, readText),
-    readJson(paths.auth, readText)
-  ]);
-  const providerBase = providerOptions(openCode)?.baseURL;
+  const configOverride = nonempty(env.OPENCODE_CONFIG);
+  const unsupportedOverride = configOverride !== null && !isAbsolute(configOverride);
+  const configFiles = [
+    await readJson(paths.openCode, readText),
+    await readJson(paths.openCodeJSONC, readText)
+  ];
+  if (configOverride !== null && !unsupportedOverride)
+    configFiles.push(await readJson(configOverride, readText));
+  const omlx = await readJson(paths.omlx, readText);
+  const auth = await readJson(paths.auth, readText);
+  const configProblem = configFiles.find((document) => document.status === "unreadable" || document.status === "malformed");
+  const mergedOpenCode = configProblem === undefined ? configFiles.filter((document) => document.status === "ok").reduce((result, document) => merge(result, document.value), {}) : null;
+  const options = providerOptions(mergedOpenCode);
+  const providerHasBase = has(options, "baseURL");
+  const providerBase = providerHasBase ? options?.baseURL : undefined;
   const envBase = nonempty(env.OMLX_SCOPE_BASE_URL);
-  const baseCandidate = envBase ?? (typeof providerBase === "string" ? providerBase : nativeEndpoint(omlx));
-  const baseURL = parseLoopbackOrigin(baseCandidate, envBase === null && typeof providerBase === "string");
-  const error = baseCandidate === null ? "No oMLX endpoint was found in OpenCode or oMLX configuration." : baseURL === null ? "The saved oMLX endpoint is not a numeric loopback HTTP origin." : null;
+  const nativeCandidate = nativeEndpoint(omlx.value);
+  const nativeProblem = omlx.status === "unreadable" || omlx.status === "malformed" ? omlx.status : null;
+  const configStatus = statusOf(configFiles);
+  const authStatus = statusOf([auth]);
+  const endpointSource = envBase !== null ? "environment" : providerHasBase ? "opencode" : nativeCandidate !== null ? "omlx" : null;
+  const sourceProblem = unsupportedOverride ? "unsupported_config" : configProblem?.status === "unreadable" ? "unreadable_config" : configProblem?.status === "malformed" ? "malformed_config" : envBase !== null || providerHasBase ? "none" : nativeProblem === "unreadable" ? "unreadable_config" : nativeProblem === "malformed" ? "malformed_config" : "none";
+  const endpointCandidate = envBase ?? (typeof providerBase === "string" ? providerBase : providerHasBase ? null : nativeCandidate);
+  const baseURL = sourceProblem !== "none" && envBase === null ? null : parseLoopbackOrigin(endpointCandidate, envBase === null && providerHasBase && typeof providerBase === "string");
+  const endpointIssue = sourceProblem !== "none" && envBase === null ? sourceProblem : endpointCandidate === null ? providerHasBase ? "invalid_endpoint" : "missing_endpoint" : baseURL === null ? "invalid_endpoint" : "none";
   const envKey = nonempty(env.OMLX_SCOPE_API_KEY);
-  const authProvider = asObject2(asObject2(auth?.omlx));
+  const authProvider = asObject2(asObject2(auth.value)?.omlx);
   const authKey = authProvider?.type === "api" ? nonempty(authProvider.key) : null;
+  const credentialIssue = envKey !== null || authKey !== null ? "none" : auth.status === "unreadable" ? "unreadable_config" : auth.status === "malformed" ? "malformed_config" : "missing_credential";
+  const issue = endpointIssue !== "none" ? endpointIssue : credentialIssue;
+  const error = issue === "missing_endpoint" ? "No oMLX endpoint was found in OpenCode or oMLX configuration." : issue === "invalid_endpoint" ? "The saved oMLX endpoint is not a numeric loopback HTTP origin." : issue === "missing_credential" ? "No oMLX API credential was found in OpenCode auth." : issue === "malformed_config" ? "A supported oMLX configuration file is malformed." : issue === "unreadable_config" ? "A supported oMLX configuration file could not be read." : issue === "unsupported_config" ? "OPENCODE_CONFIG must be an absolute path when supplied to the service." : null;
   return {
     baseURL,
     apiKey: envKey ?? authKey,
-    preferredModel: selectedOmlxModel(openCode, env),
-    error
+    preferredModel: selectedOmlxModel(mergedOpenCode, env),
+    error,
+    issue,
+    source: baseURL === null ? null : endpointSource,
+    configStatus,
+    authStatus
   };
 };
 
@@ -409,7 +667,8 @@ var responseIsRedirect = (status) => status >= 300 && status < 400;
 var requestJSON = async ({
   url,
   init,
-  fetchImpl
+  fetchImpl,
+  timeoutMs = 3000
 }) => {
   const controller = new AbortController;
   let timer;
@@ -469,7 +728,7 @@ var requestJSON = async ({
         timer = setTimeout(() => {
           controller.abort();
           reject(new OmlxFailure("runtime_unreachable", "The oMLX request timed out."));
-        }, 3000);
+        }, Math.max(1, timeoutMs));
       })
     ]);
   } catch (error) {
@@ -481,6 +740,7 @@ var requestJSON = async ({
   }
 };
 var resettableConfig = (config) => `${config.baseURL?.toString() ?? ""}\x00${config.apiKey ?? ""}`;
+var isStatsPayload = (body) => body !== null && asObject3(body.engines) !== null && asObject3(body.active_models) !== null;
 var isHealthy = (body) => {
   const pool = asObject3(body?.engine_pool);
   return body?.status === "healthy" && nonnegative2(pool?.model_count) !== null;
@@ -502,9 +762,13 @@ class OmlxClient {
   fetchImpl;
   readConfig;
   now;
+  monotonicNow;
+  requestTimeoutMs;
+  collectionDeadlineMs;
   configKey = "";
   cookie = null;
   stats = null;
+  statsState = "unavailable";
   statsAt = Number.NEGATIVE_INFINITY;
   identityAt = Number.NEGATIVE_INFINITY;
   modelStatusAt = Number.NEGATIVE_INFINITY;
@@ -512,24 +776,33 @@ class OmlxClient {
   inFlight = null;
   lastSnapshot = null;
   snapshotAt = Number.NEGATIVE_INFINITY;
+  failures = 0;
+  retryAt = Number.NEGATIVE_INFINITY;
   config = null;
   configAt = Number.NEGATIVE_INFINITY;
   signalIdentity = "";
   traceEpoch = 0;
   prefill = new Map;
-  constructor({ fetchImpl = globalThis.fetch, readConfig = resolveOmlxConfig, now = () => Date.now() } = {}) {
-    this.fetchImpl = fetchImpl;
-    this.readConfig = readConfig;
-    this.now = now;
+  constructor(options = {}) {
+    this.fetchImpl = options.fetchImpl ?? globalThis.fetch;
+    this.readConfig = options.readConfig ?? resolveOmlxConfig;
+    this.now = options.now ?? (() => Date.now());
+    this.monotonicNow = options.monotonicNow ?? (options.now ? options.now : () => performance.now());
+    this.requestTimeoutMs = options.requestTimeoutMs ?? 3000;
+    this.collectionDeadlineMs = options.collectionDeadlineMs ?? 8000;
   }
   snapshot() {
     if (this.inFlight)
       return this.inFlight;
-    if (this.lastSnapshot && this.now() - this.snapshotAt < 450)
+    const age = this.monotonicNow() - this.snapshotAt;
+    if (this.lastSnapshot && age >= 0 && (age < 450 || !this.lastSnapshot.available && this.monotonicNow() < this.retryAt)) {
       return Promise.resolve(this.lastSnapshot);
+    }
     this.inFlight = this.collect().catch(() => unavailableTelemetry("runtime_unreachable", "Local telemetry is unavailable.")).then((snapshot) => {
       this.lastSnapshot = snapshot;
-      this.snapshotAt = this.now();
+      this.snapshotAt = this.monotonicNow();
+      this.failures = snapshot.available ? 0 : Math.min(5, this.failures + 1);
+      this.retryAt = snapshot.available ? Number.NEGATIVE_INFINITY : this.snapshotAt + Math.min(15000, 1000 * 2 ** (this.failures - 1));
       return snapshot;
     }).finally(() => {
       this.inFlight = null;
@@ -537,9 +810,9 @@ class OmlxClient {
     return this.inFlight;
   }
   async configuration() {
-    if (this.config === null || this.now() - this.configAt >= 5000) {
+    if (this.config === null || this.monotonicNow() - this.configAt >= 5000) {
       this.config = await this.readConfig();
-      this.configAt = this.now();
+      this.configAt = this.monotonicNow();
     }
     return this.config;
   }
@@ -551,11 +824,12 @@ class OmlxClient {
     if (config.apiKey === null) {
       return unavailableTelemetry("authentication_failed", "No oMLX API credential was found in OpenCode auth.");
     }
-    const key = resettableConfig(config);
+    const key = `${resettableConfig(config)}\x00${config.preferredModel ?? ""}`;
     if (key !== this.configKey) {
       this.configKey = key;
       this.cookie = null;
       this.stats = null;
+      this.statsState = "unavailable";
       this.statsAt = Number.NEGATIVE_INFINITY;
       this.identityAt = Number.NEGATIVE_INFINITY;
       this.modelStatusAt = Number.NEGATIVE_INFINITY;
@@ -565,37 +839,51 @@ class OmlxClient {
       this.traceEpoch += 1;
     }
     try {
-      const now = this.now();
-      if (now - this.identityAt >= 300000) {
-        await this.verifyIdentity(config.baseURL);
-        this.identityAt = now;
+      const startedAt = this.monotonicNow();
+      const deadline = startedAt + this.collectionDeadlineMs;
+      const timeoutFor = (limit = this.requestTimeoutMs) => {
+        const remaining = deadline - this.monotonicNow();
+        if (remaining <= 0)
+          throw new OmlxFailure("runtime_unreachable", "The oMLX snapshot deadline expired.");
+        return Math.max(1, Math.min(limit, remaining));
+      };
+      if (startedAt - this.identityAt >= 300000) {
+        await this.verifyIdentity(config.baseURL, timeoutFor());
+        this.identityAt = this.monotonicNow();
       }
       if (this.cookie === null)
-        this.cookie = await this.login(config.baseURL, config.apiKey);
-      if (now - this.modelStatusAt >= 60000) {
-        this.contextWindows = await this.readModelStatus(config.baseURL, config.apiKey);
-        this.modelStatusAt = now;
+        this.cookie = await this.login(config.baseURL, config.apiKey, timeoutFor());
+      const readStatus = this.monotonicNow() - this.modelStatusAt >= 60000;
+      const readSessionStats = this.monotonicNow() - this.statsAt >= 3000;
+      const activityPromise = this.readActivity(config.baseURL, this.cookie, timeoutFor());
+      const statusPromise = readStatus ? this.readModelStatus(config.baseURL, config.apiKey, timeoutFor(Math.min(this.requestTimeoutMs, 1000))) : Promise.resolve(null);
+      const statsPromise = readSessionStats ? this.readStats(config.baseURL, this.cookie, timeoutFor()).then((value) => ({ value, error: null }), (error) => ({ value: null, error })) : Promise.resolve(null);
+      const [activity, contextWindows, statsResult] = await Promise.all([activityPromise, statusPromise, statsPromise]);
+      if (readStatus && contextWindows !== null) {
+        this.contextWindows = contextWindows;
+        this.modelStatusAt = this.monotonicNow();
       }
-      if (now - this.statsAt >= 3000) {
-        try {
-          this.stats = await this.readStats(config.baseURL, this.cookie);
-        } catch (error) {
-          if (error instanceof OmlxFailure && error.reason === "authentication_failed")
-            throw error;
-          this.stats = null;
+      if (readSessionStats && statsResult !== null) {
+        if (statsResult.error instanceof OmlxFailure && statsResult.error.reason === "authentication_failed") {
+          throw statsResult.error;
         }
-        this.statsAt = now;
+        if (statsResult.value !== null) {
+          this.stats = statsResult.value;
+          this.statsState = "fresh";
+        } else {
+          this.statsState = this.stats === null ? "unavailable" : "stale";
+        }
+        this.statsAt = this.monotonicNow();
       }
-      const activity = await this.readActivity(config.baseURL, this.cookie);
       this.observeProgress(activity);
-      const normalized = normalizeOmlxTelemetry(this.stats ?? { engines: {}, active_models: { models: [] } }, activity, this.contextWindows, config.preferredModel, this.now());
+      const normalized = normalizeOmlxTelemetry(this.stats, activity, this.contextWindows, config.preferredModel, this.now(), this.statsState);
       if (normalized === null) {
         throw new OmlxFailure("runtime_unreachable", "oMLX returned an unexpected telemetry shape.");
       }
       return {
         ...normalized,
         traceEpoch: this.traceEpoch,
-        message: normalized.message ?? (this.stats === null ? "Live activity connected · session statistics unavailable" : null)
+        message: normalized.message ?? (this.statsState === "stale" ? "Live activity connected · session statistics are from the last successful read" : this.statsState === "unavailable" ? "Live activity connected · session statistics unavailable" : null)
       };
     } catch (error) {
       this.signalIdentity = "";
@@ -605,18 +893,25 @@ class OmlxClient {
         if (error.reason === "authentication_failed") {
           this.cookie = null;
           this.stats = null;
+          this.statsState = "unavailable";
           this.statsAt = Number.NEGATIVE_INFINITY;
           this.configAt = Number.NEGATIVE_INFINITY;
+          this.identityAt = Number.NEGATIVE_INFINITY;
+        } else {
+          this.identityAt = Number.NEGATIVE_INFINITY;
         }
         return unavailableTelemetry(error.reason, error.message);
       }
       this.cookie = null;
       this.stats = null;
+      this.statsState = "unavailable";
+      this.identityAt = Number.NEGATIVE_INFINITY;
       return unavailableTelemetry("runtime_unreachable", "The oMLX telemetry request failed.");
     }
   }
   observeProgress(activity) {
     const active = asObject3(activity.active_models);
+    const observedAt = this.monotonicNow();
     const identities = [];
     const activePrefills = new Set;
     for (const modelValue of Array.isArray(active?.models) ? active.models : []) {
@@ -638,8 +933,8 @@ class OmlxClient {
             continue;
           const previous = this.prefill.get(identity2);
           if (!previous || previous.processed !== processed)
-            this.prefill.set(identity2, { processed, changedAt: this.now() });
-          if (previous && previous.processed === processed && this.now() - previous.changedAt >= 15000) {
+            this.prefill.set(identity2, { processed, changedAt: observedAt });
+          if (previous && previous.processed === processed && observedAt - previous.changedAt >= 15000) {
             flight.progress_stale = true;
           }
         }
@@ -654,24 +949,22 @@ class OmlxClient {
       this.signalIdentity = identity;
     }
   }
-  async capabilities() {
-    const config = await this.configuration();
-    return { configured: config.baseURL !== null && config.apiKey !== null, model: config.preferredModel };
-  }
-  async verifyIdentity(baseURL) {
+  async verifyIdentity(baseURL, timeoutMs) {
     const response = await requestJSON({
       url: new URL("/health", baseURL),
       fetchImpl: this.fetchImpl,
+      timeoutMs,
       init: { method: "GET", headers: { Accept: "application/json" } }
     });
     if (!isHealthy(response.body)) {
       throw new OmlxFailure("runtime_unreachable", "The service answered, but it did not identify as oMLX.");
     }
   }
-  async login(baseURL, apiKey) {
+  async login(baseURL, apiKey, timeoutMs) {
     const response = await requestJSON({
       url: new URL("/admin/api/login", baseURL),
       fetchImpl: this.fetchImpl,
+      timeoutMs,
       init: {
         method: "POST",
         headers: { Accept: "application/json", "Content-Type": "application/json" },
@@ -683,11 +976,12 @@ class OmlxClient {
     }
     return response.cookie;
   }
-  async readModelStatus(baseURL, apiKey) {
+  async readModelStatus(baseURL, apiKey, timeoutMs) {
     try {
       const response = await requestJSON({
         url: new URL("/v1/models/status", baseURL),
         fetchImpl: this.fetchImpl,
+        timeoutMs,
         init: { method: "GET", headers: { Accept: "application/json", Authorization: `Bearer ${apiKey}` } }
       });
       return parseContextWindows(response.body);
@@ -695,20 +989,20 @@ class OmlxClient {
       return new Map;
     }
   }
-  async readStats(baseURL, cookie) {
+  async readStats(baseURL, cookie, timeoutMs) {
     const response = await requestJSON({
       url: new URL("/admin/api/stats?scope=session", baseURL),
       fetchImpl: this.fetchImpl,
+      timeoutMs,
       init: { method: "GET", headers: { Accept: "application/json", Cookie: `omlx_admin_session=${cookie}` } }
     });
-    if (response.body === null)
-      throw new OmlxFailure("runtime_unreachable", "oMLX stats were empty.");
-    return response.body;
+    return isStatsPayload(response.body) ? response.body : null;
   }
-  async readActivity(baseURL, cookie) {
+  async readActivity(baseURL, cookie, timeoutMs) {
     const response = await requestJSON({
       url: new URL("/admin/api/activity", baseURL),
       fetchImpl: this.fetchImpl,
+      timeoutMs,
       init: { method: "GET", headers: { Accept: "application/json", Cookie: `omlx_admin_session=${cookie}` } }
     });
     if (response.body === null)
@@ -719,38 +1013,182 @@ class OmlxClient {
 
 // service/system.ts
 import { cpus, freemem, totalmem, platform } from "node:os";
+
+// service/mac-memory.ts
+import { execFile } from "node:child_process";
+var MAC_SAMPLE_INTERVAL_MS = 1e4;
+var MAC_COMMAND_TIMEOUT_MS = 1500;
+var MAC_COMMAND_MAX_BYTES = 64 * 1024;
+var COMMANDS = [
+  ["/usr/bin/vm_stat", []],
+  ["/usr/sbin/sysctl", ["vm.swapusage"]]
+];
+var readNative = (file, args) => new Promise((resolve) => {
+  execFile(file, [...args], {
+    encoding: "utf8",
+    timeout: MAC_COMMAND_TIMEOUT_MS,
+    maxBuffer: MAC_COMMAND_MAX_BYTES,
+    killSignal: "SIGKILL",
+    windowsHide: true,
+    env: { LANG: "C", LC_ALL: "C" }
+  }, (error, stdout) => {
+    resolve(error ? null : stdout);
+  });
+});
+var bytesToGB = (value) => Number.isFinite(value) && value >= 0 && value <= Number.MAX_SAFE_INTEGER ? value / 1e9 : null;
+var parseVMStat = (output) => {
+  const pageSize = Number(/page size of (\d+) bytes/.exec(output ?? "")?.[1]);
+  const validPageSize = Number.isSafeInteger(pageSize) && pageSize >= 1024 && pageSize <= 65536 && (pageSize & pageSize - 1) === 0;
+  const pages = (label) => {
+    if (!validPageSize)
+      return null;
+    const match = new RegExp(`^${label}:\\s+(\\d+)\\.?(?:\\s|$)`, "m").exec(output ?? "");
+    return match ? bytesToGB(Number(match[1]) * pageSize) : null;
+  };
+  return { wiredGB: pages("Pages wired down"), compressedGB: pages("Pages occupied by compressor") };
+};
+var parseSysctlMemory = (output) => {
+  const swapLine = /^vm\.swapusage:\s*(.*)$/m.exec(output ?? "")?.[1] ?? "";
+  const used = /\bused\s*=\s*(\d+(?:\.\d+)?)\s*([KMGT])(?:\s|$)/.exec(swapLine);
+  const powers = { K: 1, M: 2, G: 3, T: 4 };
+  return {
+    swapUsedGB: used ? bytesToGB(Number(used[1]) * 1024 ** powers[used[2]]) : null
+  };
+};
+
+class MacMemorySampler {
+  read;
+  now;
+  cached = null;
+  pending = null;
+  constructor(read = readNative, now = Date.now) {
+    this.read = read;
+    this.now = now;
+  }
+  sample() {
+    if (this.pending)
+      return this.pending;
+    const age = this.cached ? this.now() - this.cached.sampledAt : Infinity;
+    if (this.cached && age >= 0 && age < MAC_SAMPLE_INTERVAL_MS)
+      return Promise.resolve(this.cached);
+    this.pending = Promise.all(COMMANDS.map(([file, args]) => Promise.resolve().then(() => this.read(file, args)).catch(() => null))).then(([vm, sysctl]) => {
+      this.cached = { ...parseVMStat(vm ?? null), ...parseSysctlMemory(sysctl ?? null), sampledAt: this.now() };
+      return this.cached;
+    }).finally(() => {
+      this.pending = null;
+    });
+    return this.pending;
+  }
+}
+
+// service/system.ts
 var cpuUsage = (previous, current) => {
   if (previous === null)
     return null;
   const total = current.total - previous.total;
   const idle = current.idle - previous.idle;
-  if (total <= 0 || idle < 0 || idle > total)
+  if (!Number.isFinite(total) || !Number.isFinite(idle) || total <= 0 || idle < 0 || idle > total)
     return null;
-  return Math.max(0, Math.min(100, (1 - idle / total) * 100));
+  return (1 - idle / total) * 100;
 };
 
 class SystemSampler {
+  options;
   previous = null;
   cached = null;
-  sample(now = Date.now()) {
-    if (this.cached && now - this.cached.sampledAt < 2000)
-      return this.cached;
-    const ticks = cpus().reduce((result, cpu) => ({
+  pending = null;
+  now;
+  native;
+  constructor(options = {}) {
+    this.options = options;
+    this.now = options.now ?? Date.now;
+    this.native = options.native ?? new MacMemorySampler(undefined, this.now);
+  }
+  sample() {
+    if (this.pending)
+      return this.pending;
+    const age = this.cached ? this.now() - this.cached.sampledAt : Infinity;
+    if (this.cached && age >= 0 && age < 2000)
+      return Promise.resolve(this.cached);
+    this.pending = this.collect(age).then((snapshot) => {
+      this.cached = snapshot;
+      return snapshot;
+    }).finally(() => {
+      this.pending = null;
+    });
+    return this.pending;
+  }
+  async collect(age) {
+    const hostPlatform = this.options.hostPlatform ?? platform();
+    const macOS = hostPlatform === "darwin" ? await this.native.sample().catch(() => null) : null;
+    const cores = (this.options.readCPUs ?? cpus)();
+    const ticks = cores.reduce((result, cpu) => ({
       idle: result.idle + cpu.times.idle,
       total: result.total + Object.values(cpu.times).reduce((sum, time) => sum + time, 0)
     }), { idle: 0, total: 0 });
-    const total = totalmem();
-    this.cached = {
-      platform: platform(),
-      cpuPercent: cpuUsage(this.previous, ticks),
-      memoryUsedGB: Math.max(0, total - freemem()) / 1e9,
-      memoryTotalGB: total / 1e9,
-      sampledAt: now
-    };
+    const total = (this.options.readTotal ?? totalmem)();
+    const free = (this.options.readFree ?? freemem)();
+    const validMemory = Number.isFinite(total) && total > 0 && Number.isFinite(free) && free >= 0 && free <= total;
+    const cpuPercent = cores.length > 0 && age >= 0 && age <= 1e4 ? cpuUsage(this.previous, ticks) : null;
     this.previous = ticks;
-    return this.cached;
+    return {
+      platform: hostPlatform,
+      cpuModel: cores[0]?.model.trim().slice(0, 80) || null,
+      logicalCores: cores.length || null,
+      cpuPercent,
+      memoryUsedGB: validMemory ? (total - free) / 1e9 : null,
+      memoryTotalGB: validMemory ? total / 1e9 : null,
+      macOS,
+      sampledAt: this.now()
+    };
   }
 }
+
+// service/server.ts
+import http from "node:http";
+var json = (response, status, body) => {
+  response.writeHead(status, { "Cache-Control": "no-store", "Content-Type": "application/json; charset=utf-8", "X-Content-Type-Options": "nosniff" });
+  response.end(JSON.stringify(body));
+};
+var createScopeServer = (token, sources) => {
+  if (!token)
+    throw new Error("A service token is required.");
+  return http.createServer((request, response) => {
+    const handle = async () => {
+      const url = new URL(request.url ?? "/", "http://127.0.0.1");
+      if (request.headers.authorization !== `Bearer ${token}`) {
+        json(response, 401, { error: "unauthorized" });
+        return;
+      }
+      if (request.method !== "GET") {
+        json(response, 405, { error: "method_not_allowed" });
+        return;
+      }
+      if (url.pathname === "/health") {
+        json(response, 200, { status: "healthy" });
+        return;
+      }
+      if (url.pathname === "/snapshot") {
+        const [runtime, system] = await Promise.allSettled([
+          Promise.resolve().then(sources.snapshot),
+          Promise.resolve().then(sources.system)
+        ]);
+        json(response, 200, {
+          ...runtime.status === "fulfilled" ? runtime.value : unavailableTelemetry("runtime_unreachable", "Local inference telemetry is unavailable."),
+          system: system.status === "fulfilled" ? system.value : null
+        });
+        return;
+      }
+      json(response, 404, { error: "not_found" });
+    };
+    handle().catch(() => {
+      if (!response.headersSent)
+        json(response, 503, { error: "service_unavailable" });
+      else
+        response.end();
+    });
+  });
+};
 
 // service/main.ts
 var port = Number(process.env.OPENCHAMBER_SERVICE_PORT);
@@ -759,41 +1197,26 @@ if (!Number.isInteger(port) || port < 1 || port > 65535 || token.length === 0) {
   console.error("OpenChamber service port and token are required.");
   process.exit(1);
 }
-var json = (response, status, body) => {
-  response.statusCode = status;
-  response.setHeader("Cache-Control", "no-store");
-  response.setHeader("Content-Type", "application/json; charset=utf-8");
-  response.end(JSON.stringify(body));
-};
-var authorized = (request) => request.headers.authorization === `Bearer ${token}`;
 var client = new OmlxClient;
 var system = new SystemSampler;
-var server = http.createServer(async (request, response) => {
-  if (!authorized(request)) {
-    json(response, 401, { error: "unauthorized" });
-    return;
-  }
-  const url = new URL(request.url ?? "/", "http://127.0.0.1");
-  if (request.method === "GET" && url.pathname === "/health") {
-    json(response, 200, { status: "healthy" });
-    return;
-  }
-  if (request.method === "GET" && url.pathname === "/capabilities") {
-    json(response, 200, await client.capabilities());
-    return;
-  }
-  if (request.method === "GET" && url.pathname === "/snapshot") {
-    json(response, 200, { ...await client.snapshot(), system: system.sample() });
-    return;
-  }
-  json(response, 404, { error: "not_found" });
+var server = createScopeServer(token, {
+  snapshot: () => client.snapshot(),
+  system: () => system.sample()
 });
-server.on("error", (error) => {
-  console.error(`OMLX Scope service stopped: ${error instanceof Error ? error.message : String(error)}`);
+server.on("error", () => {
+  console.error("OMLX Scope could not start its local service.");
   process.exitCode = 1;
 });
+var stopping = false;
 var stop = () => {
+  if (stopping)
+    return;
+  stopping = true;
   server.close(() => process.exit(0));
+  setTimeout(() => {
+    server.closeAllConnections();
+    process.exit(0);
+  }, 2000).unref();
 };
 process.once("SIGTERM", stop);
 process.once("SIGINT", stop);

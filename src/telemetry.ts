@@ -15,12 +15,21 @@ export const TELEMETRY_PHASES = [
 
 export type TelemetryPhase = (typeof TELEMETRY_PHASES)[number];
 
+export const TELEMETRY_STATS_STATES = ['fresh', 'stale', 'unavailable'] as const;
+export type TelemetryStatsState = (typeof TELEMETRY_STATS_STATES)[number];
+
 export const TELEMETRY_REASONS = [
   'feature_disabled',
   'runtime_unreachable',
   'authentication_failed',
   'unparseable_snapshot',
   'unsupported_contract',
+  'host_unavailable',
+  'host_timeout',
+  'service_not_granted',
+  'service_failed',
+  'host_disconnected',
+  'host_rejected',
 ] as const;
 
 export type TelemetryReason = (typeof TELEMETRY_REASONS)[number];
@@ -43,13 +52,6 @@ export type TelemetrySessionBank = {
   lastMissReason: string | null;
 };
 
-export type TelemetryScheduler = {
-  mode: string | null;
-  preset: string | null;
-  lane: string | null;
-  queuedRequests: number | null;
-};
-
 export type TelemetryLifetime = {
   requestsTotal: number | null;
   promptTokensTotal: number | null;
@@ -61,10 +63,9 @@ export type TelemetryLifetime = {
 type TelemetryFields = {
   message: string | null;
   runtime: 'omlx' | null;
-  backendID: 'omlx' | null;
   modelID: string | null;
   phase: TelemetryPhase;
-  apiKeyRequired: boolean | null;
+  sessionStatsState: TelemetryStatsState;
   sessionAveragePrefillTPS: number | null;
   liveDecodeTPS: number | null;
   livePrefillTPS: number | null;
@@ -75,12 +76,11 @@ type TelemetryFields = {
   completionTokens: number | null;
   prefillProgress: number | null;
   elapsedSeconds: number | null;
-  activeRequests: number;
-  queuedRequests: number;
+  activeRequests: number | null;
+  queuedRequests: number | null;
   contextWindow: number | null;
   memory: TelemetryMemory | null;
   sessionBank: TelemetrySessionBank | null;
-  scheduler: TelemetryScheduler | null;
   lifetime: TelemetryLifetime | null;
   memoryPressureLevel: number | null;
   memoryPressureSource: string | null;
@@ -125,10 +125,6 @@ const text = (value: unknown): string | null => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
-const bool = (value: unknown): boolean | null => (
-  value === true ? true : value === false ? false : null
-);
-
 const firstNumber = (...values: unknown[]): number | null => {
   for (const value of values) {
     const number = nonnegative(value);
@@ -152,10 +148,9 @@ const normalizePhase = (value: unknown): TelemetryPhase => {
 const emptyFields = (sampledAt: number): TelemetryFields => ({
   message: null,
   runtime: null,
-  backendID: null,
   modelID: null,
   phase: 'unknown',
-  apiKeyRequired: null,
+  sessionStatsState: 'unavailable',
   sessionAveragePrefillTPS: null,
   liveDecodeTPS: null,
   livePrefillTPS: null,
@@ -166,12 +161,11 @@ const emptyFields = (sampledAt: number): TelemetryFields => ({
   completionTokens: null,
   prefillProgress: null,
   elapsedSeconds: null,
-  activeRequests: 0,
-  queuedRequests: 0,
+  activeRequests: null,
+  queuedRequests: null,
   contextWindow: null,
   memory: null,
   sessionBank: null,
-  scheduler: null,
   lifetime: null,
   memoryPressureLevel: null,
   memoryPressureSource: null,
@@ -218,11 +212,35 @@ type FlightSummary = {
   processingElapsed: number | null;
 };
 
-const normalizeFlights = (model: JsonObject | null, lookup: JsonObject): FlightSummary => {
+const normalizeFlights = (model: JsonObject | null, lookup: JsonObject, ambiguous = false): FlightSummary => {
   if (model === null) {
     return {
       phase: 'idle',
       message: null,
+      liveDecodeTPS: null,
+      livePrefillTPS: null,
+      promptTokens: null,
+      cachedTokens: null,
+      completionTokens: null,
+      prefillProgress: null,
+      elapsedSeconds: null,
+      processingElapsed: null,
+    };
+  }
+
+  const hasStateEvidence = [
+    'active_requests',
+    'waiting_requests',
+    'prefilling',
+    'generating',
+    'waiting',
+    'activities',
+    'is_loading',
+  ].some((key) => Object.prototype.hasOwnProperty.call(model, key));
+  if (!hasStateEvidence) {
+    return {
+      phase: 'unknown',
+      message: 'Model state unavailable · waiting for a complete runtime sample',
       liveDecodeTPS: null,
       livePrefillTPS: null,
       promptTokens: null,
@@ -244,8 +262,11 @@ const normalizeFlights = (model: JsonObject | null, lookup: JsonObject): FlightS
     completionTokens: null,
     prefillProgress: null,
     elapsedSeconds: null,
-    processingElapsed: nonnegative(model.loading_elapsed_seconds),
+      processingElapsed: nonnegative(model.loading_elapsed_seconds),
   };
+  if (ambiguous) {
+    return { ...summary, phase: 'processing', message: 'Concurrent requests or models · per-request values withheld' };
+  }
   const waiting = arrayOfObjects(model.waiting);
   const prefilling = arrayOfObjects(model.prefilling);
   const generatingFlights = arrayOfObjects(model.generating);
@@ -325,9 +346,14 @@ const normalizeFlights = (model: JsonObject | null, lookup: JsonObject): FlightS
   return summary;
 };
 
-const normalizeWaiting = (models: JsonObject[], active: JsonObject): number => {
+const normalizeWaiting = (models: JsonObject[], active: JsonObject): number | null => {
   const reported = nonnegative(active.total_waiting_requests)
-    ?? models.reduce((total, model) => total + (nonnegative(model.waiting_requests) ?? 0), 0);
+    ?? (models.length === 0
+      ? 0
+      : models.every((model) => nonnegative(model.waiting_requests) !== null)
+        ? models.reduce((total, model) => total + nonnegative(model.waiting_requests)!, 0)
+        : null);
+  if (reported === null) return null;
   let overlap = 0;
   for (const model of models) {
     const activeIDs = new Set<string>();
@@ -355,9 +381,9 @@ const normalizeMemory = (active: JsonObject, model: JsonObject | null, cache: Js
   cacheGB: gb(cache.hot_cache_size_bytes),
 });
 
-const normalizeSessionBank = (cache: JsonObject, lookup: JsonObject): TelemetrySessionBank => {
+const normalizeSessionBank = (cache: JsonObject, lookup: JsonObject): TelemetrySessionBank | null => {
   const cold = asObject(cache.cold_tier);
-  return {
+  const bank: TelemetrySessionBank = {
     hot: {
       totalGB: gb(cache.hot_cache_size_bytes),
       entries: firstNumber(cache.hot_cache_entries),
@@ -368,15 +394,25 @@ const normalizeSessionBank = (cache: JsonObject, lookup: JsonObject): TelemetryS
     },
     lastMissReason: text(lookup.reason),
   };
+  return [
+    bank.hot?.totalGB,
+    bank.hot?.entries,
+    bank.cold?.totalGB,
+    bank.cold?.entries,
+    bank.lastMissReason,
+  ].some((value) => value !== null && value !== undefined) ? bank : null;
 };
 
-const normalizeLifetime = (stats: JsonObject): TelemetryLifetime => ({
-  requestsTotal: firstNumber(stats.total_requests),
-  promptTokensTotal: firstNumber(stats.total_prompt_tokens),
-  completionTokensTotal: firstNumber(stats.total_completion_tokens),
-  cachedTokensTotal: firstNumber(stats.total_cached_tokens),
-  uptimeSeconds: firstNumber(stats.uptime_seconds),
-});
+const normalizeLifetime = (stats: JsonObject): TelemetryLifetime | null => {
+  const lifetime = {
+    requestsTotal: firstNumber(stats.total_requests),
+    promptTokensTotal: firstNumber(stats.total_prompt_tokens),
+    completionTokensTotal: firstNumber(stats.total_completion_tokens),
+    cachedTokensTotal: firstNumber(stats.total_cached_tokens),
+    uptimeSeconds: firstNumber(stats.uptime_seconds),
+  };
+  return Object.values(lifetime).some((value) => value !== null) ? lifetime : null;
+};
 
 /**
  * Convert the read-only oMLX dashboard payloads into the extension's small,
@@ -384,17 +420,16 @@ const normalizeLifetime = (stats: JsonObject): TelemetryLifetime => ({
  * appear in the returned object.
  */
 export const normalizeOmlxTelemetry = (
-  statsValue: unknown,
+  statsValue: unknown | null,
   activityValue: unknown | null,
   contextWindows: ReadonlyMap<string, number> = new Map(),
   preferredModel: string | null = null,
   sampledAt = Date.now(),
+  sessionStatsState: TelemetryStatsState = 'fresh',
 ): AvailableTelemetry | null => {
   const stats = asObject(statsValue);
   const savedActive = stats === null ? null : asObject(stats.active_models);
-  if (stats === null || savedActive === null || asObject(stats.engines) === null) {
-    return null;
-  }
+  const statsAreUsable = stats !== null && savedActive !== null && asObject(stats.engines) !== null;
   let active = savedActive;
   if (activityValue !== null) {
     const activity = asObject(activityValue);
@@ -403,16 +438,26 @@ export const normalizeOmlxTelemetry = (
     active = freshActive;
   }
 
-  if (!Array.isArray(active.models)) return null;
+  if (active === null || !Array.isArray(active.models)) return null;
   const models = arrayOfObjects(active.models);
   const model = matchingModel(models, preferredModel);
   const modelID = text(model?.id);
-  const cache = asObject(stats.runtime_cache) ?? {};
+  const activeRequests = models.length === 0
+    ? 0
+    : nonnegative(active.total_active_requests)
+      ?? (models.every((item) => nonnegative(item.active_requests) !== null)
+        ? models.reduce((total, item) => total + nonnegative(item.active_requests)!, 0)
+        : null);
+  const activeModelCount = models.filter((item) => (
+    (arrayOfObjects(item.prefilling).length + arrayOfObjects(item.generating).length > 0)
+      || (nonnegative(item.active_requests) ?? 0) > 0
+  )).length;
+  const ambiguous = activeModelCount > 1 || (activeRequests !== null && activeRequests > 1);
+  const statsData = statsAreUsable ? stats! : {};
+  const cache = asObject(statsData.runtime_cache) ?? {};
   const modelCache = arrayOfObjects(cache.models).find((candidate) => text(candidate.id) === modelID) ?? {};
   const lookup = asObject(modelCache.last_prefix_lookup) ?? {};
-  const flight = normalizeFlights(model, lookup);
-  const activeRequests = nonnegative(active.total_active_requests)
-    ?? models.reduce((total, item) => total + (nonnegative(item.active_requests) ?? 0), 0);
+  const flight = normalizeFlights(model, lookup, ambiguous);
   const queuedRequests = normalizeWaiting(models, active);
   const pressure = asObject(active.memory_pressure);
   const pressureName = text(pressure?.pressure_level);
@@ -430,12 +475,6 @@ export const normalizeOmlxTelemetry = (
     entries: cache.total_num_files,
   };
   const sessionBank = normalizeSessionBank({ ...cache, cold_tier: coldTier }, lookup);
-  const scheduler: TelemetryScheduler = {
-    mode: 'oMLX',
-    preset: null,
-    lane: null,
-    queuedRequests,
-  };
   const memory = normalizeMemory(active, model, cache);
 
   return {
@@ -443,15 +482,14 @@ export const normalizeOmlxTelemetry = (
     reason: null,
     message: flight.message,
     runtime: 'omlx',
-    backendID: 'omlx',
     modelID,
-    phase: models.length === 0 ? 'notLoaded' : flight.phase === 'idle' && queuedRequests > 0 ? 'queued' : flight.phase,
-    apiKeyRequired: true,
-    sessionAveragePrefillTPS: firstNumber(stats.avg_prefill_tps),
+    phase: models.length === 0 ? 'notLoaded' : flight.phase === 'idle' && queuedRequests !== null && queuedRequests > 0 ? 'queued' : flight.phase,
+    sessionStatsState,
+    sessionAveragePrefillTPS: firstNumber(statsData.avg_prefill_tps),
     liveDecodeTPS: flight.liveDecodeTPS,
     livePrefillTPS: flight.livePrefillTPS,
-    sessionAverageDecodeTPS: firstNumber(stats.avg_generation_tps),
-    sessionCacheEfficiencyPercent: firstNumber(stats.cache_efficiency),
+    sessionAverageDecodeTPS: firstNumber(statsData.avg_generation_tps),
+    sessionCacheEfficiencyPercent: firstNumber(statsData.cache_efficiency),
     promptTokens: flight.promptTokens,
     cachedTokens: flight.cachedTokens,
     completionTokens: flight.completionTokens,
@@ -462,8 +500,7 @@ export const normalizeOmlxTelemetry = (
     contextWindow: modelID === null ? null : contextWindows.get(modelID) ?? null,
     memory,
     sessionBank,
-    scheduler,
-    lifetime: normalizeLifetime(stats),
+    lifetime: sessionStatsState === 'unavailable' && !statsAreUsable ? null : normalizeLifetime(statsData),
     memoryPressureLevel: pressureLevel,
     memoryPressureSource: pressureLevel === null ? null : 'oMLX process memory guard (not macOS pressure)',
     sampledAt,
@@ -490,22 +527,18 @@ const normalizeSessionBankFromPanel = (value: unknown): TelemetrySessionBank | n
     const object = asObject(entry);
     return object === null ? null : { totalGB: nonnegative(object.totalGB), entries: nonnegative(object.entries) };
   };
-  return {
+  const normalized: TelemetrySessionBank = {
     hot: tier(bank.hot),
     cold: tier(bank.cold),
     lastMissReason: text(bank.lastMissReason),
   };
-};
-
-const normalizeSchedulerFromPanel = (value: unknown): TelemetryScheduler | null => {
-  const scheduler = asObject(value);
-  if (scheduler === null) return null;
-  return {
-    mode: text(scheduler.mode),
-    preset: text(scheduler.preset),
-    lane: text(scheduler.lane),
-    queuedRequests: nonnegative(scheduler.queuedRequests),
-  };
+  return [
+    normalized.hot?.totalGB,
+    normalized.hot?.entries,
+    normalized.cold?.totalGB,
+    normalized.cold?.entries,
+    normalized.lastMissReason,
+  ].some((entry) => entry !== null && entry !== undefined) ? normalized : null;
 };
 
 const normalizeLifetimeFromPanel = (value: unknown): TelemetryLifetime | null => {
@@ -521,9 +554,9 @@ const normalizeLifetimeFromPanel = (value: unknown): TelemetryLifetime | null =>
 };
 
 /** Validate the service response before any value enters the DOM. */
-export const parseTelemetrySnapshot = (value: unknown): TelemetrySnapshot => {
+export const parseTelemetrySnapshot = (value: unknown, observedAt?: number): TelemetrySnapshot => {
   const record = asObject(value);
-  const sampledAt = finite(record?.sampledAt) ?? Date.now();
+  const sampledAt = finite(observedAt) ?? finite(record?.sampledAt) ?? Date.now();
   if (record?.available !== true) {
     const reason = text(record?.reason);
     const safeReason = reason !== null && (TELEMETRY_REASONS as readonly string[]).includes(reason)
@@ -531,17 +564,20 @@ export const parseTelemetrySnapshot = (value: unknown): TelemetrySnapshot => {
       : 'unparseable_snapshot';
     return { ...unavailableTelemetry(safeReason, text(record?.message), sampledAt), system: parseSystemSnapshot(record?.system) };
   }
-  const active = nonnegative(record.activeRequests) ?? 0;
-  const queued = nonnegative(record.queuedRequests) ?? 0;
+  const statsState = text(record.sessionStatsState);
+  const sessionStatsState = statsState !== null && (TELEMETRY_STATS_STATES as readonly string[]).includes(statsState)
+    ? statsState as TelemetryStatsState
+    : 'unavailable';
+  const active = nonnegative(record.activeRequests);
+  const queued = nonnegative(record.queuedRequests);
   return {
     available: true,
     reason: null,
     message: text(record.message),
     runtime: text(record.runtime) === 'omlx' ? 'omlx' : null,
-    backendID: text(record.backendID) === 'omlx' ? 'omlx' : null,
     modelID: text(record.modelID),
     phase: normalizePhase(record.phase),
-    apiKeyRequired: bool(record.apiKeyRequired),
+    sessionStatsState,
     sessionAveragePrefillTPS: nonnegative(record.sessionAveragePrefillTPS),
     liveDecodeTPS: nonnegative(record.liveDecodeTPS),
     livePrefillTPS: nonnegative(record.livePrefillTPS),
@@ -557,9 +593,10 @@ export const parseTelemetrySnapshot = (value: unknown): TelemetrySnapshot => {
     contextWindow: nonnegative(record.contextWindow),
     memory: normalizeMemoryFromPanel(record.memory),
     sessionBank: normalizeSessionBankFromPanel(record.sessionBank),
-    scheduler: normalizeSchedulerFromPanel(record.scheduler),
     lifetime: normalizeLifetimeFromPanel(record.lifetime),
-    memoryPressureLevel: nonnegative(record.memoryPressureLevel),
+    memoryPressureLevel: nonnegative(record.memoryPressureLevel) === null
+      ? null
+      : Math.min(3, Math.trunc(nonnegative(record.memoryPressureLevel)!)),
     memoryPressureSource: text(record.memoryPressureSource),
     sampledAt,
     traceEpoch: nonnegative(record.traceEpoch),

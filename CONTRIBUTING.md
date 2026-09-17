@@ -1,22 +1,39 @@
 # Contributing
 
-## Local setup
+## Development
 
 ```bash
 bun install --frozen-lockfile
 bun run check
+bunx playwright install chromium webkit
+bun run test:browser
 ```
 
-Keep `panel/main.js` and `service/main.js` synchronized with their TypeScript
-sources. The OpenChamber host installs the built JavaScript files and does not
-compile TypeScript for users.
+`bun run check` runs TypeScript, unit/integration tests, the production build,
+and installable-package verification. `bun run test:browser` starts the preview
+server and tests the built panel. `bun run check:all` runs both. On Linux,
+the real macOS command test is skipped; CI runs it on a macOS runner.
+
+`bun run preview` opens a local synthetic test harness, not a connection to
+your oMLX server. Screenshots and traces are written to ignored test directories.
 
 ## Pull requests
 
-- Keep changes focused and explain user-visible behavior.
-- Do not include `node_modules`, credentials, raw telemetry captures, or local
-  configuration files.
-- Run `bun run check` before opening a pull request.
-- For visual changes, include the tested viewport sizes and a screenshot when
-  practical.
-- Preserve the read-only scope and loopback-only service boundary.
+Keep changes focused. Explain observable behavior, include regression tests,
+and preserve the documented SDK and read-only boundaries. Do not add private
+APIs, a second monitoring service, or dependencies without a demonstrated need.
+For visual changes, verify both themes and compact/full-page layouts.
+
+Never commit credentials, raw model responses, personal configuration,
+`node_modules`, or local build tools. Keep `panel/main.js` and `service/main.js`
+synchronized with their TypeScript sources; OpenChamber installs those bundles
+without compiling them.
+
+## Release checks
+
+Run `bun run check:all` and confirm that rebuilding produces no bundle diff.
+The package verifier creates a fresh ZIP from the explicit `package.json` file
+allowlist, checks its entries, and compares extracted contents with the sources.
+It rejects host-only code in the browser bundle and enforces the size budget.
+Do not call a synthetic preview a live hardware test. Record any live
+OpenChamber/oMLX verification separately before declaring a release qualified.

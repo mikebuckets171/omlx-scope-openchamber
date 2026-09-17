@@ -147,7 +147,8 @@ describe('OMLX Scope telemetry contract', () => {
       available: true,
       runtime: null,
       phase: 'unknown',
-      activeRequests: 0,
+      activeRequests: null,
+      sessionStatsState: 'unavailable',
       memory: { activeGB: null, modelGB: 4 },
     });
   });

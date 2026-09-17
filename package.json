@@ -1,7 +1,7 @@
 {
   "name": "omlx-scope-openchamber",
-  "version": "0.4.0",
-  "description": "Lightweight, read-only oMLX and host-system monitor for OpenChamber",
+  "version": "0.5.0",
+  "description": "A lightweight oMLX and Mac resource monitor for OpenChamber",
   "private": true,
   "license": "MIT",
   "author": "mikebuckets171",
@@ -46,8 +46,15 @@
       ],
       "service": {
         "entry": "service/main.js",
-        "runtime": "host"
-      }
+        "runtime": "host",
+        "permissions": {
+          "exec": [
+            "/usr/bin/vm_stat",
+            "/usr/sbin/sysctl"
+          ]
+        }
+      },
+      "page": true
     }
   },
   "scripts": {
@@ -55,15 +62,19 @@
     "build:panel": "openchamber-guest-bundle panel/main.ts panel/main.js",
     "build:service": "openchamber-guest-bundle --node service/main.ts service/main.js",
     "type-check": "tsc --noEmit",
-    "test": "bun test",
+    "test": "bun test ./service ./src ./panel",
     "preview": "bun run build:panel && bun dev/server.ts",
+    "test:browser": "playwright test",
     "verify:package": "bun scripts/verify-package.ts",
-    "check": "bun run type-check && bun test && bun run build && bun run verify:package"
+    "check": "bun run type-check && bun run test && bun run build && bun run verify:package",
+    "check:all": "bun run check && bun run test:browser"
   },
   "dependencies": {
-    "@openchamber/sdk": "1.24.0"
+    "@openchamber/sdk": "1.24.0",
+    "jsonc-parser": "3.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.61.0",
     "@types/bun": "1.3.4",
     "@types/node": "24.3.1",
     "typescript": "5.9.3"
@@ -82,6 +93,8 @@
     "panel/main.js",
     "panel/style.css",
     "panel/scope-icon.svg",
-    "service/main.js"
+    "service/main.js",
+    "docs/CONFIGURATION.md",
+    "docs/METRICS.md"
   ]
 }

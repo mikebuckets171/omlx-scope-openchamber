@@ -1,27 +1,36 @@
 # Changelog
 
+## 0.5.0 — Unreleased
+
+- Added a full-page monitor alongside the compact OpenChamber panel.
+- Added bounded CPU and memory history, Mac wired/compressed memory, and swap readings.
+- Kept host readings available during oMLX connection failures.
+- Added pause/resume and stale-response handling without changing model execution.
+- Improved retry scheduling and retained separate freshness states for session totals.
+- Corrected environment-dependent configuration tests and strengthened package checks.
+- Expanded macOS and cross-browser verification.
+- Refreshed the installation guide and metric reference.
+
+## 0.4.1 — 2026-09-17
+
+- Added JSONC configuration support and clearer connection diagnostics.
+- Improved handling of incomplete activity and stale session statistics.
+- Added request deadlines, loopback integration tests, and browser checks.
+- Clarified that monitoring covers the runtime rather than an individual chat.
+
 ## 0.4.0 — 2026-09-17
 
-- Added an OpenChamber session action that opens OMLX Scope with the selected
-  session shown as context.
-- Documented the SDK boundary: guest pages cannot mount inside the built-in
-  Session inspector.
+- Added an OpenChamber session-menu shortcut to the monitor.
 
 ## 0.3.0 — 2026-09-17
 
-- Rebranded the public plugin as **OMLX Scope**.
-- Renamed the OpenChamber identity to `omlx-scope` and the isolated test
-  overrides to `OMLX_SCOPE_*`.
-- Moved the public repository to `omlx-scope-openchamber`.
+- Updated package identity and installation settings.
 
 ## 0.2.0 — 2026-09-17
 
-- Rebranded the extension as **oMLX Telemetry** for OpenChamber.
-- Added a clean public-repository boundary, release metadata, privacy/security
-  documentation, and CI.
-- Refined the panel into a compact instrument surface without adding metrics.
-- Renamed isolated test environment variables to `OMLX_TELEMETRY_*`.
+- Added public distribution, licensing, privacy documentation, and CI.
+- Refined the compact monitoring panel.
 
 ## 0.1.0
 
-- Initial read-only oMLX telemetry panel and host service.
+- Initial read-only oMLX monitor and local service.

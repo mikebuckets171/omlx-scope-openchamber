@@ -1,52 +1,49 @@
-# OMLX Scope · design and operating budget
+# Architecture
 
-One question: **what is my local model doing, and how is my Mac handling it?**
+OMLX Scope has two components: a sandboxed OpenChamber panel and one host-managed
+local service. The compact panel and full-page view share the same implementation.
 
-The signature is a quiet, timestamped scope trace—not a wall of metric cards.
-The waveform and the current request share one open surface. The Mac gets a
-separate, cool-toned resource strip; session aggregates sit below it. Runtime
-details are a disclosure, not a competing dashboard. No repeated model names,
-project paths, animated ambient effects, external fonts, charts library, or UI
-framework.
+## Data flow
 
-## Visual vocabulary
+```text
+OpenChamber panel → SDK serviceRequest → authenticated loopback service
+                                       ├─ oMLX monitoring endpoints
+                                       └─ host OS readings
+```
 
-- Graphite `#10151b`, inset slate `#1b252e`, ink-white `#e9f0f5`, muted steel
-  `#9aa9b7`, signal mint `#7dd9bd`, system blue `#86b7ed`.
-- Light: paper `#f7f9fb`, ink `#172a37`, muted `#596977`, mint `#197e68`.
-- Production colors adapt to the OpenChamber host's semantic tokens. The palette
-  above is the review fixture, not a forced theme.
-- System sans for hierarchy, proportional display numerals with tabular digits,
-  monospace only for small quantitative comparisons.
-- 24px outer inset, one 10px system surface, hairlines where scope changes.
-- Generating uses mint, reading uses blue, waiting/reconnecting uses amber.
-  Text always states the phase; color is supplementary.
+The panel uses `connectHost`, the host's theme tokens, and documented panel/page
+manifest entries. It has no direct network, filesystem, command execution, or
+credential access. The service accepts only authenticated GET requests to
+`/health` and `/snapshot`. Runtime and host failures are isolated.
 
-## Honest readings
+## Resource budget
 
-Throughput is oMLX's **current request average**, not an interval-speed estimate.
-A fixed 90-second horizontal domain and zero vertical baseline avoid stretching
-or exaggerating short captures. Request/model/phase changes and lost samples
-break the trace. Missing measurements remain unavailable. No completion ledger
-is synthesized from server totals.
+| Work | Limit |
+| --- | --- |
+| Active inference polling | No faster than every 500 ms per visible panel |
+| Idle polling | Every 2 seconds |
+| Failed oMLX reads | Shared exponential retry delay, capped at 15 seconds |
+| Basic host observations | Shared cache, at most once every 2 seconds |
+| macOS commands | Two fixed commands, at most once every 10 seconds |
+| Command timeout/output | 1.5 seconds and 64 KiB per command |
+| Runtime requests | 3 seconds per request, within an 8-second collection budget |
+| Upstream response body | 2,000,000 bytes maximum |
+| Chart history | 90 seconds; at most 200 inference and 100 host observations |
+| Installable assets | 160 KiB maximum before compression |
 
-Host CPU is a delta of OS counters. Non-free RAM is physical minus OS-reported
-free memory and includes reclaimable pages. Neither is specific to oMLX or an
-equivalent of macOS memory pressure. Process footprint is only shown when the
-runtime explicitly reports it through its enabled memory guard.
+There is no background sampling timer in the service. Consumers share pending
+requests and cached observations. The UI patches a stable DOM rather than
+recreating controls; only changed text and chart geometry are updated. Hidden
+or paused panels do not schedule requests. No persistent telemetry store,
+additional daemon, or native companion is installed.
 
-## Work budget
+These are enforced implementation limits, not measured CPU or battery claims.
 
-- One pending SDK request and one timer; 500ms active, 2s idle, up to 15s retry.
-- Pause when the document is hidden; resume on visibility and bfcache restore.
-- Stable DOM; no dashboard replacement or refresh spinner on automatic polls.
-- Service coalesces concurrent consumers and caches snapshots for 450ms.
-- Config/credential files: at most every 5s; stats: 3s; model limits: 60s.
-- Host CPU/RAM sample: at most every 2s, no subprocess or privileged helper.
-- Bounded trace (200 points), response (2MB), and full-request deadline (3s).
+## Verification
 
-## Verification surface
-
-`bun run preview` is an isolated synthetic SDK host. Query `?theme=light`,
-`?state=idle`, `prefill`, `queued`, `notLoaded`, `offline`, `auth`, or `reconnect`.
-`&long=1` exercises long model names. It never reads local config or calls oMLX.
+Unit and loopback integration tests cover normalization, credentials, request
+limits, failure isolation, parsing, scheduling, and chart boundaries. CI also
+runs native command smoke tests on macOS and the built panel in Chromium and
+WebKit with synthetic SDK messages. Browser tests verify both themes, compact
+and full-page layouts, disclosure/focus stability, pause/resume, stale responses,
+and unavailable readings. Synthetic previews never connect to a real model.
