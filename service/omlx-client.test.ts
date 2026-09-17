@@ -14,7 +14,7 @@ const config = {
   error: null,
 };
 
-describe('oMLX Telemetry service client', () => {
+describe('OMLX Scope service client', () => {
   it('extracts only the oMLX session cookie', () => {
     expect(__test__.extractCookie('other=x; Path=/, omlx_admin_session=abc123; HttpOnly')).toBe('abc123');
     expect(__test__.extractCookie(null)).toBeNull();

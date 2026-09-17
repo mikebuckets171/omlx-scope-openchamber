@@ -22,7 +22,8 @@ jobs:
       - name: Verify manifest
         run: >-
           bun -e 'const p = await Bun.file("package.json").json();
-          if (p.openchamber?.contributes?.panel?.id !== "omlx-telemetry" ||
+          if (p.openchamber?.contributes?.panel?.id !== "omlx-scope" ||
+          p.openchamber?.contributes?.panel?.name !== "OMLX Scope" ||
           p.openchamber?.contributes?.service?.entry !== "service/main.js")
           process.exit(1)'
       - name: Type-check, test, and build

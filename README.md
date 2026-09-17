@@ -1,6 +1,6 @@
-# oMLX Telemetry for OpenChamber
+# OMLX Scope for OpenChamber
 
-An independent third-party OpenChamber extension for a calm, read-only view of
+An independent third-party OpenChamber extension for a calm, read-only scope of
 local [oMLX](https://github.com/jundot/omlx) inference activity. It uses the
 official OpenChamber guest SDK and does not patch OpenChamber's React surface,
 web server, or runtime.
@@ -39,12 +39,12 @@ The checked-in installable package is the folder itself. It contains:
    followed by `bun run check`.
 3. In OpenChamber **1.24.0 or newer**, choose **Settings → Extensions → Add**
    and select the repository folder.
-4. Approve the requested local-service capability, then open **oMLX
-   Telemetry** from the extension rail.
+4. Approve the requested local-service capability, then open **OMLX Scope** from
+   the extension rail.
 
-The renamed `omlx-telemetry` panel is a new OpenChamber extension identity. If
-you previously installed the older `rapidscope` build, remove it before adding
-this one so the host does not retain both panels.
+The renamed `omlx-scope` panel is a new OpenChamber extension identity. If you
+previously installed **oMLX Telemetry** or the older `rapidscope` build, remove
+it before adding this one so the host does not retain both panels.
 
 The service runs wherever OpenChamber runs. For a remote OpenChamber server,
 “local” means the server's machine, not necessarily your Mac. OpenChamber
@@ -68,8 +68,8 @@ The session panel also surfaces oMLX's weighted prefill average, decode average,
 and cache-efficiency percentage; these aggregates are scoped to the oMLX server
 session/statistics reset and are not current request rates.
 
-For isolated local tests, `OMLX_TELEMETRY_BASE_URL`, `OMLX_TELEMETRY_API_KEY`,
-and `OMLX_TELEMETRY_MODEL` may be supplied to the service process.
+For isolated local tests, `OMLX_SCOPE_BASE_URL`, `OMLX_SCOPE_API_KEY`, and
+`OMLX_SCOPE_MODEL` may be supplied to the service process.
 OpenChamber's host intentionally does not forward arbitrary parent environment
 variables to installed services, so normal installs should use the files above.
 

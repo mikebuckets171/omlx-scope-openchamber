@@ -44,7 +44,7 @@ const server = http.createServer(async (request, response) => {
 });
 
 server.on('error', (error) => {
-  console.error(`oMLX Telemetry service stopped: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`OMLX Scope service stopped: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
 });
 

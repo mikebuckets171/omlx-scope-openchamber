@@ -1,6 +1,6 @@
 # Privacy
 
-oMLX Telemetry is an independent, local-only OpenChamber extension. It has no
+OMLX Scope is an independent, local-only OpenChamber extension. It has no
 analytics, crash reporting, advertising, hosted backend, or telemetry about
 the extension itself.
 

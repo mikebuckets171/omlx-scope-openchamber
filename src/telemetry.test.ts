@@ -75,7 +75,7 @@ const stats = (options: StatsOptions = {}) => {
   };
 };
 
-describe('oMLX Telemetry contract', () => {
+describe('OMLX Scope telemetry contract', () => {
   it('normalizes live oMLX decode data without request identifiers', () => {
     const result = normalizeOmlxTelemetry(stats(), null, new Map([
       ['mlx-community/Qwen3.8-27B-Instruct-4bit', 131_072],

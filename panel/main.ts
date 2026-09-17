@@ -10,7 +10,7 @@ import {
 
 const host = connectHost();
 const root = document.querySelector('#root');
-if (!root) throw new Error('oMLX Telemetry is missing its root element.');
+if (!root) throw new Error('OMLX Scope is missing its root element.');
 
 const style = `
 *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--oc-bg);color:var(--oc-fg);font-family:var(--oc-font);font-size:13px;line-height:1.45}body{overflow-x:hidden;overflow-wrap:anywhere}button{font:inherit;touch-action:manipulation}.rs button:focus-visible{outline:2px solid var(--oc-accent,var(--oc-success-text));outline-offset:3px}.rs button:hover:not(:disabled){filter:brightness(1.08)}.rs button:active:not(:disabled){transform:translateY(1px)}[hidden]{display:none!important}
@@ -163,8 +163,8 @@ const page = element('main', 'rs');
 const header = element('header', 'rs-header');
 const heading = element('div', 'rs-heading');
 const titleRow = element('div', 'rs-actions');
-const title = element('h1', '', 'oMLX Telemetry');
-title.id = 'omlx-telemetry-title';
+const title = element('h1', '', 'OMLX Scope');
+title.id = 'omlx-scope-title';
 const brandline = element('div', 'rs-brandline');
 const mark = element('span', 'rs-mark');
 mark.setAttribute('aria-hidden', 'true');
@@ -202,7 +202,7 @@ noticeSlot.setAttribute('aria-live', 'polite');
 noticeSlot.setAttribute('aria-atomic', 'true');
 const notice = mountBadge(noticeSlot, { label: '', tone: 'neutral' });
 const body = element('div', 'rs-stack');
-const footer = element('footer', 'rs-footer', 'Independent third-party extension · read-only local telemetry');
+const footer = element('footer', 'rs-footer', 'Independent third-party extension · read-only local oMLX scope');
 page.append(header, noticeSlot, body, footer);
 page.setAttribute('aria-labelledby', title.id);
 root.append(page);
@@ -450,7 +450,7 @@ const renderUnavailable = (snapshot: TelemetrySnapshot | null): HTMLElement => {
     element('div', 'rs-reading-unit', phase === 'connecting' ? 'approved local service' : 'local runtime'),
     element('p', `rs-reading-detail${snapshot?.reason === 'authentication_failed' ? ' rs-error' : ''}`, snapshot?.message ?? 'Starting the approved local telemetry service…'),
   );
-  const note = element('p', 'rs-note', 'oMLX Telemetry reads local OpenCode/oMLX configuration and accepts only 127.0.0.1 HTTP endpoints. Credentials stay in the approved service and never enter the panel.');
+  const note = element('p', 'rs-note', 'OMLX Scope reads local OpenCode/oMLX configuration and accepts only 127.0.0.1 HTTP endpoints. Credentials stay in the approved service and never enter the panel.');
   card.append(top, reading, note);
   return card;
 };

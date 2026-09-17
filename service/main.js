@@ -336,7 +336,7 @@ var providerOptions = (config) => {
   return asObject2(omlx?.options);
 };
 var selectedOmlxModel = (config, env) => {
-  const configured = nonempty(env.OMLX_TELEMETRY_MODEL);
+  const configured = nonempty(env.OMLX_SCOPE_MODEL);
   if (configured !== null)
     return configured;
   const model = nonempty(config?.model);
@@ -359,11 +359,11 @@ var resolveOmlxConfig = async ({ env = process.env, home = env.HOME ?? homedir()
     readJson(paths.auth, readText)
   ]);
   const providerBase = providerOptions(openCode)?.baseURL;
-  const envBase = nonempty(env.OMLX_TELEMETRY_BASE_URL);
+  const envBase = nonempty(env.OMLX_SCOPE_BASE_URL);
   const baseCandidate = envBase ?? (typeof providerBase === "string" ? providerBase : nativeEndpoint(omlx));
   const baseURL = parseLoopbackOrigin(baseCandidate, envBase === null && typeof providerBase === "string");
   const error = baseCandidate === null ? "No oMLX endpoint was found in OpenCode or oMLX configuration." : baseURL === null ? "The saved oMLX endpoint is not a numeric loopback HTTP origin." : null;
-  const envKey = nonempty(env.OMLX_TELEMETRY_API_KEY);
+  const envKey = nonempty(env.OMLX_SCOPE_API_KEY);
   const authProvider = asObject2(asObject2(auth?.omlx));
   const authKey = authProvider?.type === "api" ? nonempty(authProvider.key) : null;
   return {
@@ -616,7 +616,7 @@ var server = http.createServer(async (request, response) => {
   json(response, 404, { error: "not_found" });
 });
 server.on("error", (error) => {
-  console.error(`oMLX Telemetry service stopped: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`OMLX Scope service stopped: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
 });
 var stop = () => {

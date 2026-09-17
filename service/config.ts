@@ -91,7 +91,7 @@ const providerOptions = (config: JsonObject | null): JsonObject | null => {
 };
 
 const selectedOmlxModel = (config: JsonObject | null, env: NodeJS.ProcessEnv): string | null => {
-  const configured = nonempty(env.OMLX_TELEMETRY_MODEL);
+  const configured = nonempty(env.OMLX_SCOPE_MODEL);
   if (configured !== null) return configured;
   const model = nonempty(config?.model);
   if (model === null) return null;
@@ -118,7 +118,7 @@ export const resolveOmlxConfig = async ({ env = process.env, home = env.HOME ?? 
   ]);
 
   const providerBase = providerOptions(openCode)?.baseURL;
-  const envBase = nonempty(env.OMLX_TELEMETRY_BASE_URL);
+  const envBase = nonempty(env.OMLX_SCOPE_BASE_URL);
   const baseCandidate = envBase ?? (typeof providerBase === 'string' ? providerBase : nativeEndpoint(omlx));
   const baseURL = parseLoopbackOrigin(baseCandidate, envBase === null && typeof providerBase === 'string');
   const error = baseCandidate === null
@@ -127,7 +127,7 @@ export const resolveOmlxConfig = async ({ env = process.env, home = env.HOME ?? 
       ? 'The saved oMLX endpoint is not a numeric loopback HTTP origin.'
       : null;
 
-  const envKey = nonempty(env.OMLX_TELEMETRY_API_KEY);
+  const envKey = nonempty(env.OMLX_SCOPE_API_KEY);
   const authProvider = asObject(asObject(auth?.omlx));
   const authKey = authProvider?.type === 'api' ? nonempty(authProvider.key) : null;
 

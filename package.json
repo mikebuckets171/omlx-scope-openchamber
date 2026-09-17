@@ -1,17 +1,17 @@
 {
-  "name": "omlx-telemetry-openchamber",
-  "version": "0.2.0",
-  "description": "Independent third-party oMLX telemetry panel for OpenChamber",
+  "name": "omlx-scope-openchamber",
+  "version": "0.3.0",
+  "description": "Independent third-party OMLX Scope panel for OpenChamber",
   "private": true,
   "license": "MIT",
   "author": "mikebuckets171",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mikebuckets171/omlx-telemetry-openchamber.git"
+    "url": "git+https://github.com/mikebuckets171/omlx-scope-openchamber.git"
   },
-  "homepage": "https://github.com/mikebuckets171/omlx-telemetry-openchamber",
+  "homepage": "https://github.com/mikebuckets171/omlx-scope-openchamber",
   "bugs": {
-    "url": "https://github.com/mikebuckets171/omlx-telemetry-openchamber/issues"
+    "url": "https://github.com/mikebuckets171/omlx-scope-openchamber/issues"
   },
   "keywords": [
     "openchamber",
@@ -31,8 +31,8 @@
     },
     "contributes": {
       "panel": {
-        "id": "omlx-telemetry",
-        "name": "oMLX Telemetry",
+        "id": "omlx-scope",
+        "name": "OMLX Scope",
         "icon": "pulse",
         "entry": "panel/index.html"
       },

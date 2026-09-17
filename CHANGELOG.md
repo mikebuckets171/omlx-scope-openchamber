@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 — 2026-09-17
+
+- Rebranded the public plugin as **OMLX Scope**.
+- Renamed the OpenChamber identity to `omlx-scope` and the isolated test
+  overrides to `OMLX_SCOPE_*`.
+- Moved the public repository to `omlx-scope-openchamber`.
+
 ## 0.2.0 — 2026-09-17
 
 - Rebranded the extension as **oMLX Telemetry** for OpenChamber.

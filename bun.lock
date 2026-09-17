@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "omlx-telemetry-openchamber",
+      "name": "omlx-scope-openchamber",
       "dependencies": {
         "@openchamber/sdk": "1.24.0",
       },
