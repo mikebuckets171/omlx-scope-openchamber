@@ -32,3 +32,17 @@ jobs:
           path: omlx-scope-source.zip
           retention-days: 7
           if-no-files-found: error
+      - name: Prepare offline verification tools
+        if: github.ref == 'refs/heads/improve/resource-monitor'
+        run: |
+          mkdir -p .review-tools
+          cp "$(command -v bun)" .review-tools/bun
+          tar -czf review-tools.tgz .review-tools/bun node_modules
+      - name: Upload offline verification tools
+        if: github.ref == 'refs/heads/improve/resource-monitor'
+        uses: actions/upload-artifact@v4
+        with:
+          name: review-tools
+          path: review-tools.tgz
+          retention-days: 1
+          if-no-files-found: error
