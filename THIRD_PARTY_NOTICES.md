@@ -13,7 +13,13 @@ The OpenChamber SDK depends on Zod 4.6.5, licensed under the MIT License.
 
 Copyright (c) 2025 Colin McDonnell
 
-The full MIT license text for both dependencies is reproduced below:
+## JSONC Parser
+
+The bundled service uses `jsonc-parser` 3.3.1, licensed under the MIT License.
+
+Copyright (c) Microsoft
+
+The full MIT license text for these dependencies is reproduced below:
 
 > Permission is hereby granted, free of charge, to any person obtaining a copy
 > of this software and associated documentation files (the "Software"), to deal
