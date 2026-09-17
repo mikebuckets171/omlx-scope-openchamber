@@ -42,6 +42,11 @@ The checked-in installable package is the folder itself. It contains:
 4. Approve the requested local-service capability, then open **OMLX Scope** from
    the extension rail.
 
+From a session's actions menu, **Open OMLX Scope** opens the same panel with the
+session name shown as context. The official guest SDK keeps extension pages in
+their own surface; it does not allow an extension to inject content directly
+into OpenChamber's built-in Session inspector.
+
 The renamed `omlx-scope` panel is a new OpenChamber extension identity. If you
 previously installed **oMLX Telemetry** or the older `rapidscope` build, remove
 it before adding this one so the host does not retain both panels.
@@ -64,9 +69,9 @@ The service reads the existing local OpenCode/oMLX configuration on the host:
 Only numeric loopback HTTP origins (`http://127.0.0.1:<port>`) are accepted.
 The credential is read and used by the service process; it is not passed to the
 panel or logged. The panel receives only normalized scalar telemetry.
-The session panel also surfaces oMLX's weighted prefill average, decode average,
-and cache-efficiency percentage; these aggregates are scoped to the oMLX server
-session/statistics reset and are not current request rates.
+The OMLX Scope panel also surfaces oMLX's weighted prefill average, decode
+average, and cache-efficiency percentage; these aggregates are scoped to the
+oMLX server session/statistics reset and are not current request rates.
 
 For isolated local tests, `OMLX_SCOPE_BASE_URL`, `OMLX_SCOPE_API_KEY`, and
 `OMLX_SCOPE_MODEL` may be supplied to the service process.

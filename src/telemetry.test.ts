@@ -53,7 +53,7 @@ const stats = (options: StatsOptions = {}) => {
       ...model,
     }],
     model_memory_used: 18_400_000_000,
-    memory_pressure: { enabled: true, pressure_level: 'ok' },
+    memory_pressure: { enabled: true, pressure_level: 'ok', current_bytes: 21_000_000_000 },
     total_active_requests: 1,
     total_waiting_requests: options.total_waiting_requests ?? 0,
   },
@@ -131,13 +131,13 @@ describe('OMLX Scope telemetry contract', () => {
 
   it('rejects incomplete raw payloads', () => {
     expect(normalizeOmlxTelemetry({}, null)).toBeNull();
-    expect(normalizeOmlxTelemetry({ engines: {}, total_requests: 1, active_models: { models: [] } }, null)).toBeNull();
+    expect(normalizeOmlxTelemetry({ engines: {}, total_requests: 1, active_models: {} }, null)).toBeNull();
   });
 
   it('keeps malformed service values out of the panel contract', () => {
     const result = parseTelemetrySnapshot({
       available: true,
-      runtime: 'mtplx',
+      runtime: 'unsupported',
       phase: 'made-up',
       activeRequests: -1,
       memory: { activeGB: 'secret', modelGB: 4 },
@@ -150,5 +150,27 @@ describe('OMLX Scope telemetry contract', () => {
       activeRequests: 0,
       memory: { activeGB: null, modelGB: 4 },
     });
+  });
+
+  it('treats an empty resident-model list as a healthy no-model state', () => {
+    expect(normalizeOmlxTelemetry({ engines: {}, total_requests: 0, active_models: { models: [] } }, null))
+      .toMatchObject({ available: true, phase: 'notLoaded', modelID: null, liveDecodeTPS: null });
+  });
+
+  it('never exposes stale prefill speed or combines concurrent request metadata', () => {
+    const stale = stats({ generating: [], prefilling: [{ request_id: 'a', processed: 12, total: 100, speed: 50, progress_stale: true }] });
+    expect(normalizeOmlxTelemetry(stale, null)?.livePrefillTPS).toBeNull();
+    const concurrent = stats({ active_requests: 2, prefilling: [{ request_id: 'second', processed: 12, total: 100, speed: 50 }] });
+    expect(normalizeOmlxTelemetry(concurrent, null)).toMatchObject({ phase: 'processing', liveDecodeTPS: null, livePrefillTPS: null, promptTokens: null, cachedTokens: null });
+  });
+
+  it('separates process footprint from model allocation and sums model counts', () => {
+    const source = stats();
+    expect(normalizeOmlxTelemetry(source, null)?.memory).toMatchObject({ activeGB: 21, modelGB: 16.9 });
+    source.active_models.memory_pressure.enabled = false;
+    expect(normalizeOmlxTelemetry(source, null)?.memory?.activeGB).toBeNull();
+    const { total_active_requests: _a, total_waiting_requests: _w, ...active } = source.active_models;
+    const models = [0, 1].map((index) => ({ ...active.models[0], id: String(index), active_requests: 1, waiting_requests: 2, waiting: [] }));
+    expect(normalizeOmlxTelemetry(source, { active_models: { ...active, models } })).toMatchObject({ activeRequests: 2, queuedRequests: 4 });
   });
 });

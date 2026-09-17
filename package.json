@@ -1,7 +1,7 @@
 {
   "name": "omlx-scope-openchamber",
-  "version": "0.3.0",
-  "description": "Independent third-party OMLX Scope panel for OpenChamber",
+  "version": "0.4.0",
+  "description": "Lightweight, read-only oMLX and host-system monitor for OpenChamber",
   "private": true,
   "license": "MIT",
   "author": "mikebuckets171",
@@ -33,9 +33,17 @@
       "panel": {
         "id": "omlx-scope",
         "name": "OMLX Scope",
-        "icon": "pulse",
+        "icon": "panel/scope-icon.svg",
         "entry": "panel/index.html"
       },
+      "actions": [
+        {
+          "id": "open-omlx-scope",
+          "label": "Open OMLX Scope",
+          "icon": "panel/scope-icon.svg",
+          "where": "session"
+        }
+      ],
       "service": {
         "entry": "service/main.js",
         "runtime": "host"
@@ -48,7 +56,9 @@
     "build:service": "openchamber-guest-bundle --node service/main.ts service/main.js",
     "type-check": "tsc --noEmit",
     "test": "bun test",
-    "check": "bun run type-check && bun test && bun run build"
+    "preview": "bun run build:panel && bun dev/server.ts",
+    "verify:package": "bun scripts/verify-package.ts",
+    "check": "bun run type-check && bun test && bun run build && bun run verify:package"
   },
   "dependencies": {
     "@openchamber/sdk": "1.24.0"
@@ -68,7 +78,10 @@
     "CHANGELOG.md",
     "CONTRIBUTING.md",
     "CODE_OF_CONDUCT.md",
-    "panel",
-    "service"
+    "panel/index.html",
+    "panel/main.js",
+    "panel/style.css",
+    "panel/scope-icon.svg",
+    "service/main.js"
   ]
 }

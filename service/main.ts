@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { OmlxClient } from './omlx-client.ts';
+import { SystemSampler } from './system.ts';
 
 const port = Number(process.env.OPENCHAMBER_SERVICE_PORT);
 const token = process.env.OPENCHAMBER_SERVICE_TOKEN ?? '';
@@ -21,6 +22,7 @@ const authorized = (request: http.IncomingMessage): boolean => (
 );
 
 const client = new OmlxClient();
+const system = new SystemSampler();
 const server = http.createServer(async (request, response) => {
   if (!authorized(request)) {
     json(response, 401, { error: 'unauthorized' });
@@ -37,7 +39,7 @@ const server = http.createServer(async (request, response) => {
     return;
   }
   if (request.method === 'GET' && url.pathname === '/snapshot') {
-    json(response, 200, await client.snapshot());
+    json(response, 200, { ...await client.snapshot(), system: system.sample() });
     return;
   }
   json(response, 404, { error: 'not_found' });

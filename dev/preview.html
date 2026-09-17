@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"><title>OMLX Scope · synthetic preview</title><style>html,body{margin:0;background:#10151b;font:11px -apple-system,sans-serif}aside{height:24px;display:grid;place-items:center;background:#203044;color:#c4d6e9}iframe{display:block;width:100%;height:calc(100vh - 24px);border:0}</style></head>
+<body><aside>Synthetic preview · no connection to your runtime</aside><iframe title="OMLX Scope" src="/panel/index.html"></iframe><script>
+const frame = document.querySelector('iframe');
+const params = new URLSearchParams(location.search);
+const light = params.get('theme') === 'light';
+const state = params.get('state') || 'decode';
+const sessionItem = params.get('item') === 'session' ? {kind:'session', action:'open-omlx-scope', sessionId:'synthetic-session', sessionTitle:params.get('sessionTitle') || 'Synthetic session', directory:null} : null;
+let samples = 0;
+window.previewRequests = 0;
+const tokens = {
+  background: light ? '#f7f9fb' : '#10151b', foreground: light ? '#172a37' : '#e9f0f5',
+  muted: light ? '#596977' : '#9aa9b7', border: light ? '#ced7df' : '#2b3743',
+  mutedSurface: light ? '#e9eef3' : '#1b252e', elevated: light ? '#ffffff' : '#202c36',
+  primary: '#609bda', primaryText: '#609bda', primaryForeground: '#ffffff',
+  success: light ? '#197e68' : '#7dd9bd', successText: light ? '#197e68' : '#7dd9bd',
+  warning: light ? '#966113' : '#dfb976', warningText: light ? '#966113' : '#dfb976',
+  error: light ? '#b13a45' : '#ee8992', errorText: light ? '#b13a45' : '#ee8992',
+  info: light ? '#286cae' : '#86b7ed', infoText: light ? '#286cae' : '#86b7ed',
+  font: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', mono: 'ui-monospace, SFMono-Regular, Menlo, monospace', radius: '9px',
+};
+const post = (message) => frame.contentWindow.postMessage({channel:'openchamber.sdk',v:1,...message}, location.origin);
+window.addEventListener('message', (event) => {
+  if(event.source !== frame.contentWindow || event.data?.channel !== 'openchamber.sdk') return;
+  const m = event.data;
+if(m.type === 'hello') { post({type:'ready',payload:{theme:{mode:light?'light':'dark',tokens},locale:'en-US',directory:null,session:null,surface:'panel',connection:{connected:true,account:''},settings:{},item:sessionItem}}); return; }
+  if(m.type === 'service-status') { post({type:'result',id:m.id,ok:true,payload:{status:'ready'}}); return; }
+  if(m.type !== 'service-request') return;
+  window.previewRequests += 1;
+  samples += 1;
+  const phase = state === 'reconnect' && samples > 4 ? 'offline' : state;
+  const available = !['offline','auth'].includes(phase);
+  const payload = {
+    available, reason: available ? null : phase === 'auth' ? 'authentication_failed' : 'runtime_unreachable',
+    message: available ? null : phase === 'auth' ? 'The saved credential was rejected by oMLX.' : 'oMLX is not responding. Start the server, then refresh.',
+    runtime:'omlx',backendID:'omlx',phase,apiKeyRequired:true,
+    modelID:phase === 'notLoaded' ? null : params.get('long') ? 'publisher/a-very-long-model-name-with-a-large-context-window-and-quantization-details-27B-4bit' : 'Qwen3.8-27B-4bit',
+    liveDecodeTPS:phase === 'decode' ? 24.6 + Math.sin(samples / 3) * 1.4 : null,
+    livePrefillTPS:phase === 'prefill' ? 184.5 : null, sessionAverageDecodeTPS:23.2, sessionAveragePrefillTPS:184.5,sessionCacheEfficiencyPercent:82.3,
+    promptTokens:['decode','prefill'].includes(phase)?52100:null,cachedTokens:['decode','prefill'].includes(phase)?43000:null,completionTokens:phase==='decode'?6482+samples*12:null,
+    prefillProgress:phase==='prefill'?.64:null, elapsedSeconds:phase==='decode'?260+samples/2:null,activeRequests:['decode','prefill','processing'].includes(phase)?1:0,queuedRequests:phase==='queued'?2:0,contextWindow:131072,
+    memory:{activeGB:34.5,modelGB:17.1,cacheGB:3.2,peakGB:null},sessionBank:{hot:{entries:7,totalGB:3.2},cold:{entries:188,totalGB:22.4},lastMissReason:'prefix_hit'},
+    memoryPressureLevel:1,memoryPressureSource:'oMLX process memory guard',scheduler:{mode:'oMLX'},lifetime:{requestsTotal:381,uptimeSeconds:51420},sampledAt:Date.now(),traceEpoch:1,
+    system:{platform:'darwin',cpuPercent:28.4,memoryUsedGB:47.6,memoryTotalGB:68.7,sampledAt:Date.now()},
+  };
+  post({type:'result',id:m.id,ok:true,payload:{status:200,body:JSON.stringify(payload)}});
+});
+</script></body></html>

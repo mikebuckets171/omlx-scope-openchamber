@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0 — 2026-09-17
+
+- Added an OpenChamber session action that opens OMLX Scope with the selected
+  session shown as context.
+- Documented the SDK boundary: guest pages cannot mount inside the built-in
+  Session inspector.
+
 ## 0.3.0 — 2026-09-17
 
 - Rebranded the public plugin as **OMLX Scope**.

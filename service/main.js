@@ -52,7 +52,9 @@ var emptyFields = (sampledAt) => ({
   lifetime: null,
   memoryPressureLevel: null,
   memoryPressureSource: null,
-  sampledAt
+  sampledAt,
+  traceEpoch: null,
+  system: null
 });
 var unavailableTelemetry = (reason, message = null, sampledAt = Date.now()) => ({
   available: false,
@@ -61,7 +63,7 @@ var unavailableTelemetry = (reason, message = null, sampledAt = Date.now()) => (
   message: text(message)
 });
 var arrayOfObjects = (value) => Array.isArray(value) ? value.map(asObject).filter((item) => item !== null) : [];
-var matchingModel = (models, preferredModel) => models.find((model) => (nonnegative(model.active_requests) ?? 0) > 0 || model.is_loading === true) ?? (preferredModel === null ? undefined : models.find((model) => model.id === preferredModel)) ?? models[0] ?? null;
+var matchingModel = (models, preferredModel) => models.find((model) => Array.isArray(model.generating) && model.generating.length > 0) ?? models.find((model) => Array.isArray(model.prefilling) && model.prefilling.length > 0) ?? models.find((model) => (nonnegative(model.active_requests) ?? 0) > 0) ?? models.find((model) => model.is_loading === true) ?? (preferredModel === null ? undefined : models.find((model) => model.id === preferredModel)) ?? models[0] ?? null;
 var normalizeFlights = (model, lookup) => {
   if (model === null) {
     return {
@@ -90,7 +92,12 @@ var normalizeFlights = (model, lookup) => {
     processingElapsed: nonnegative(model.loading_elapsed_seconds)
   };
   const waiting = arrayOfObjects(model.waiting);
-  for (const prefill of arrayOfObjects(model.prefilling)) {
+  const prefilling = arrayOfObjects(model.prefilling);
+  const generatingFlights = arrayOfObjects(model.generating);
+  if (prefilling.length + generatingFlights.length > 1 || (nonnegative(model.active_requests) ?? 0) > 1) {
+    return { ...summary, phase: "processing", message: "Concurrent requests · per-request speed withheld" };
+  }
+  for (const prefill of prefilling) {
     const requestID = text(prefill.request_id);
     const waitingRequest = requestID === null ? null : waiting.find((candidate) => candidate.request_id === requestID) ?? null;
     const matchesLookup = requestID !== null && requestID === text(lookup.request_id);
@@ -103,14 +110,14 @@ var normalizeFlights = (model, lookup) => {
       ...summary,
       phase: "prefill",
       message: prefill.progress_stale === true ? "Prefill is active · waiting for fresh progress" : summary.message,
-      livePrefillTPS: firstNumber(prefill.speed),
+      livePrefillTPS: prefill.progress_stale === true ? null : firstNumber(prefill.speed),
       promptTokens,
       cachedTokens,
       prefillProgress: progress,
       elapsedSeconds: firstNumber(prefill.elapsed)
     };
   }
-  for (const generating of arrayOfObjects(model.generating)) {
+  for (const generating of generatingFlights) {
     const generated = nonnegative(generating.generated_tokens) ?? 0;
     const elapsed = nonnegative(generating.elapsed_seconds) ?? 0;
     const age = nonnegative(generating.last_activity_age_seconds);
@@ -125,7 +132,9 @@ var normalizeFlights = (model, lookup) => {
         message: generated > 0 ? "No recent output · request still active" : "Waiting for the first output token",
         processingElapsed: nonnegative(generating.elapsed_seconds),
         promptTokens,
-        cachedTokens
+        cachedTokens,
+        completionTokens: nonnegative(generating.generated_tokens),
+        elapsedSeconds: nonnegative(generating.elapsed_seconds)
       };
       continue;
     }
@@ -140,7 +149,7 @@ var normalizeFlights = (model, lookup) => {
       elapsedSeconds: elapsed
     };
   }
-  if (arrayOfObjects(model.activities).length > 0) {
+  if (arrayOfObjects(model.activities).length > 0 && summary.phase === "idle") {
     summary = {
       ...summary,
       phase: "processing",
@@ -150,10 +159,13 @@ var normalizeFlights = (model, lookup) => {
   if ((nonnegative(model.active_requests) ?? 0) > 0 && summary.phase === "idle") {
     summary = { ...summary, phase: "processing" };
   }
+  if (summary.cachedTokens !== null && (summary.promptTokens === null || summary.cachedTokens > summary.promptTokens)) {
+    summary.cachedTokens = null;
+  }
   return summary;
 };
 var normalizeWaiting = (models, active) => {
-  const reported = firstNumber(active.total_waiting_requests, ...models.map((model) => model.waiting_requests)) ?? 0;
+  const reported = nonnegative(active.total_waiting_requests) ?? models.reduce((total, model) => total + (nonnegative(model.waiting_requests) ?? 0), 0);
   let overlap = 0;
   for (const model of models) {
     const activeIDs = new Set;
@@ -173,7 +185,7 @@ var normalizeWaiting = (models, active) => {
   return Math.max(0, reported - overlap);
 };
 var normalizeMemory = (active, model, cache) => ({
-  activeGB: gb(active.model_memory_used),
+  activeGB: asObject(active.memory_pressure)?.enabled === true ? gb(asObject(active.memory_pressure)?.current_bytes) : null,
   peakGB: null,
   modelGB: gb(model?.actual_size),
   cacheGB: gb(cache.hot_cache_size_bytes)
@@ -202,7 +214,7 @@ var normalizeLifetime = (stats) => ({
 var normalizeOmlxTelemetry = (statsValue, activityValue, contextWindows = new Map, preferredModel = null, sampledAt = Date.now()) => {
   const stats = asObject(statsValue);
   const savedActive = stats === null ? null : asObject(stats.active_models);
-  if (stats === null || savedActive === null || asObject(stats.engines) === null || finite(stats.total_requests) === null) {
+  if (stats === null || savedActive === null || asObject(stats.engines) === null) {
     return null;
   }
   let active = savedActive;
@@ -213,16 +225,16 @@ var normalizeOmlxTelemetry = (statsValue, activityValue, contextWindows = new Ma
       return null;
     active = freshActive;
   }
-  const models = arrayOfObjects(active.models);
-  if (models.length === 0)
+  if (!Array.isArray(active.models))
     return null;
+  const models = arrayOfObjects(active.models);
   const model = matchingModel(models, preferredModel);
   const modelID = text(model?.id);
   const cache = asObject(stats.runtime_cache) ?? {};
   const modelCache = arrayOfObjects(cache.models).find((candidate) => text(candidate.id) === modelID) ?? {};
   const lookup = asObject(modelCache.last_prefix_lookup) ?? {};
   const flight = normalizeFlights(model, lookup);
-  const activeRequests = firstNumber(active.total_active_requests, ...models.map((item) => item.active_requests)) ?? 0;
+  const activeRequests = nonnegative(active.total_active_requests) ?? models.reduce((total, item) => total + (nonnegative(item.active_requests) ?? 0), 0);
   const queuedRequests = normalizeWaiting(models, active);
   const pressure = asObject(active.memory_pressure);
   const pressureName = text(pressure?.pressure_level);
@@ -248,7 +260,7 @@ var normalizeOmlxTelemetry = (statsValue, activityValue, contextWindows = new Ma
     runtime: "omlx",
     backendID: "omlx",
     modelID,
-    phase: flight.phase === "idle" && queuedRequests > 0 ? "queued" : flight.phase,
+    phase: models.length === 0 ? "notLoaded" : flight.phase === "idle" && queuedRequests > 0 ? "queued" : flight.phase,
     apiKeyRequired: true,
     sessionAveragePrefillTPS: firstNumber(stats.avg_prefill_tps),
     liveDecodeTPS: flight.liveDecodeTPS,
@@ -269,7 +281,9 @@ var normalizeOmlxTelemetry = (statsValue, activityValue, contextWindows = new Ma
     lifetime: normalizeLifetime(stats),
     memoryPressureLevel: pressureLevel,
     memoryPressureSource: pressureLevel === null ? null : "oMLX process memory guard (not macOS pressure)",
-    sampledAt
+    sampledAt,
+    traceEpoch: null,
+    system: null
   };
 };
 
@@ -398,39 +412,73 @@ var requestJSON = async ({
   fetchImpl
 }) => {
   const controller = new AbortController;
-  const timer = setTimeout(() => controller.abort(), 3000);
-  let response;
+  let timer;
   try {
-    response = await fetchImpl(url.toString(), {
-      ...init,
-      redirect: "manual",
-      signal: controller.signal
-    });
-  } catch {
+    const work = async () => {
+      const response = await fetchImpl(url.toString(), {
+        ...init,
+        redirect: "manual",
+        signal: controller.signal
+      });
+      if (!response || responseIsRedirect(response.status) || response.url !== "" && response.url !== url.toString()) {
+        throw new OmlxFailure("runtime_unreachable", "The oMLX runtime returned an unsafe response.");
+      }
+      if (response.status === 401 || response.status === 403) {
+        throw new OmlxFailure("authentication_failed", "The oMLX runtime rejected its saved credential.");
+      }
+      if (response.status !== 200) {
+        throw new OmlxFailure("runtime_unreachable", `The oMLX runtime returned HTTP ${response.status}.`);
+      }
+      let body = null;
+      try {
+        const reader = response.body?.getReader();
+        let size = 0;
+        const chunks = [];
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done)
+              break;
+            size += value.byteLength;
+            if (size > 2000000) {
+              await reader.cancel();
+              throw new Error("Response too large");
+            }
+            chunks.push(value);
+          }
+        }
+        const bytes = new Uint8Array(size);
+        let offset = 0;
+        for (const chunk of chunks) {
+          bytes.set(chunk, offset);
+          offset += chunk.length;
+        }
+        body = asObject3(JSON.parse(new TextDecoder().decode(bytes)));
+      } catch {
+        throw new OmlxFailure("runtime_unreachable", "The oMLX runtime returned invalid JSON.");
+      }
+      return {
+        status: response.status,
+        body,
+        cookie: extractCookie(response.headers.get("set-cookie"))
+      };
+    };
+    return await Promise.race([
+      work(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          controller.abort();
+          reject(new OmlxFailure("runtime_unreachable", "The oMLX request timed out."));
+        }, 3000);
+      })
+    ]);
+  } catch (error) {
+    if (error instanceof OmlxFailure)
+      throw error;
     throw new OmlxFailure("runtime_unreachable", "The oMLX runtime did not answer.");
   } finally {
     clearTimeout(timer);
   }
-  if (!response || responseIsRedirect(response.status) || response.url !== "" && response.url !== url.toString()) {
-    throw new OmlxFailure("runtime_unreachable", "The oMLX runtime returned an unsafe response.");
-  }
-  if (response.status === 401 || response.status === 403) {
-    throw new OmlxFailure("authentication_failed", "The oMLX runtime rejected its saved credential.");
-  }
-  if (response.status !== 200) {
-    throw new OmlxFailure("runtime_unreachable", `The oMLX runtime returned HTTP ${response.status}.`);
-  }
-  let body = null;
-  try {
-    body = asObject3(await response.json());
-  } catch {
-    throw new OmlxFailure("runtime_unreachable", "The oMLX runtime returned invalid JSON.");
-  }
-  return {
-    status: response.status,
-    body,
-    cookie: extractCookie(response.headers.get("set-cookie"))
-  };
 };
 var resettableConfig = (config) => `${config.baseURL?.toString() ?? ""}\x00${config.apiKey ?? ""}`;
 var isHealthy = (body) => {
@@ -457,17 +505,46 @@ class OmlxClient {
   configKey = "";
   cookie = null;
   stats = null;
-  statsAt = 0;
+  statsAt = Number.NEGATIVE_INFINITY;
   identityAt = Number.NEGATIVE_INFINITY;
   modelStatusAt = Number.NEGATIVE_INFINITY;
   contextWindows = new Map;
+  inFlight = null;
+  lastSnapshot = null;
+  snapshotAt = Number.NEGATIVE_INFINITY;
+  config = null;
+  configAt = Number.NEGATIVE_INFINITY;
+  signalIdentity = "";
+  traceEpoch = 0;
+  prefill = new Map;
   constructor({ fetchImpl = globalThis.fetch, readConfig = resolveOmlxConfig, now = () => Date.now() } = {}) {
     this.fetchImpl = fetchImpl;
     this.readConfig = readConfig;
     this.now = now;
   }
-  async snapshot() {
-    const config = await this.readConfig();
+  snapshot() {
+    if (this.inFlight)
+      return this.inFlight;
+    if (this.lastSnapshot && this.now() - this.snapshotAt < 450)
+      return Promise.resolve(this.lastSnapshot);
+    this.inFlight = this.collect().catch(() => unavailableTelemetry("runtime_unreachable", "Local telemetry is unavailable.")).then((snapshot) => {
+      this.lastSnapshot = snapshot;
+      this.snapshotAt = this.now();
+      return snapshot;
+    }).finally(() => {
+      this.inFlight = null;
+    });
+    return this.inFlight;
+  }
+  async configuration() {
+    if (this.config === null || this.now() - this.configAt >= 5000) {
+      this.config = await this.readConfig();
+      this.configAt = this.now();
+    }
+    return this.config;
+  }
+  async collect() {
+    const config = await this.configuration();
     if (config.baseURL === null) {
       return unavailableTelemetry("runtime_unreachable", config.error);
     }
@@ -479,10 +556,13 @@ class OmlxClient {
       this.configKey = key;
       this.cookie = null;
       this.stats = null;
-      this.statsAt = 0;
+      this.statsAt = Number.NEGATIVE_INFINITY;
       this.identityAt = Number.NEGATIVE_INFINITY;
       this.modelStatusAt = Number.NEGATIVE_INFINITY;
       this.contextWindows = new Map;
+      this.signalIdentity = "";
+      this.prefill.clear();
+      this.traceEpoch += 1;
     }
     try {
       const now = this.now();
@@ -496,20 +576,38 @@ class OmlxClient {
         this.contextWindows = await this.readModelStatus(config.baseURL, config.apiKey);
         this.modelStatusAt = now;
       }
-      if (this.stats === null || now - this.statsAt >= 3000) {
-        this.stats = await this.readStats(config.baseURL, this.cookie);
+      if (now - this.statsAt >= 3000) {
+        try {
+          this.stats = await this.readStats(config.baseURL, this.cookie);
+        } catch (error) {
+          if (error instanceof OmlxFailure && error.reason === "authentication_failed")
+            throw error;
+          this.stats = null;
+        }
         this.statsAt = now;
       }
       const activity = await this.readActivity(config.baseURL, this.cookie);
-      const normalized = normalizeOmlxTelemetry(this.stats, activity, this.contextWindows, config.preferredModel, now);
+      this.observeProgress(activity);
+      const normalized = normalizeOmlxTelemetry(this.stats ?? { engines: {}, active_models: { models: [] } }, activity, this.contextWindows, config.preferredModel, this.now());
       if (normalized === null) {
         throw new OmlxFailure("runtime_unreachable", "oMLX returned an unexpected telemetry shape.");
       }
-      return normalized;
+      return {
+        ...normalized,
+        traceEpoch: this.traceEpoch,
+        message: normalized.message ?? (this.stats === null ? "Live activity connected · session statistics unavailable" : null)
+      };
     } catch (error) {
+      this.signalIdentity = "";
+      this.traceEpoch += 1;
+      this.prefill.clear();
       if (error instanceof OmlxFailure) {
-        if (error.reason === "authentication_failed")
+        if (error.reason === "authentication_failed") {
           this.cookie = null;
+          this.stats = null;
+          this.statsAt = Number.NEGATIVE_INFINITY;
+          this.configAt = Number.NEGATIVE_INFINITY;
+        }
         return unavailableTelemetry(error.reason, error.message);
       }
       this.cookie = null;
@@ -517,8 +615,47 @@ class OmlxClient {
       return unavailableTelemetry("runtime_unreachable", "The oMLX telemetry request failed.");
     }
   }
+  observeProgress(activity) {
+    const active = asObject3(activity.active_models);
+    const identities = [];
+    const activePrefills = new Set;
+    for (const modelValue of Array.isArray(active?.models) ? active.models : []) {
+      const model = asObject3(modelValue);
+      if (!model)
+        continue;
+      for (const kind of ["prefilling", "generating"]) {
+        for (const entry of Array.isArray(model[kind]) ? model[kind] : []) {
+          const flight = asObject3(entry);
+          if (!flight)
+            continue;
+          const identity2 = JSON.stringify([model.id, kind, flight.request_id]);
+          identities.push(identity2);
+          if (kind !== "prefilling")
+            continue;
+          activePrefills.add(identity2);
+          const processed = nonnegative2(flight.processed);
+          if (processed === null)
+            continue;
+          const previous = this.prefill.get(identity2);
+          if (!previous || previous.processed !== processed)
+            this.prefill.set(identity2, { processed, changedAt: this.now() });
+          if (previous && previous.processed === processed && this.now() - previous.changedAt >= 15000) {
+            flight.progress_stale = true;
+          }
+        }
+      }
+    }
+    for (const key of this.prefill.keys())
+      if (!activePrefills.has(key))
+        this.prefill.delete(key);
+    const identity = identities.sort().join("|");
+    if (identity !== this.signalIdentity) {
+      this.traceEpoch += 1;
+      this.signalIdentity = identity;
+    }
+  }
   async capabilities() {
-    const config = await this.readConfig();
+    const config = await this.configuration();
     return { configured: config.baseURL !== null && config.apiKey !== null, model: config.preferredModel };
   }
   async verifyIdentity(baseURL) {
@@ -555,7 +692,7 @@ class OmlxClient {
       });
       return parseContextWindows(response.body);
     } catch {
-      return this.contextWindows;
+      return new Map;
     }
   }
   async readStats(baseURL, cookie) {
@@ -580,6 +717,41 @@ class OmlxClient {
   }
 }
 
+// service/system.ts
+import { cpus, freemem, totalmem, platform } from "node:os";
+var cpuUsage = (previous, current) => {
+  if (previous === null)
+    return null;
+  const total = current.total - previous.total;
+  const idle = current.idle - previous.idle;
+  if (total <= 0 || idle < 0 || idle > total)
+    return null;
+  return Math.max(0, Math.min(100, (1 - idle / total) * 100));
+};
+
+class SystemSampler {
+  previous = null;
+  cached = null;
+  sample(now = Date.now()) {
+    if (this.cached && now - this.cached.sampledAt < 2000)
+      return this.cached;
+    const ticks = cpus().reduce((result, cpu) => ({
+      idle: result.idle + cpu.times.idle,
+      total: result.total + Object.values(cpu.times).reduce((sum, time) => sum + time, 0)
+    }), { idle: 0, total: 0 });
+    const total = totalmem();
+    this.cached = {
+      platform: platform(),
+      cpuPercent: cpuUsage(this.previous, ticks),
+      memoryUsedGB: Math.max(0, total - freemem()) / 1e9,
+      memoryTotalGB: total / 1e9,
+      sampledAt: now
+    };
+    this.previous = ticks;
+    return this.cached;
+  }
+}
+
 // service/main.ts
 var port = Number(process.env.OPENCHAMBER_SERVICE_PORT);
 var token = process.env.OPENCHAMBER_SERVICE_TOKEN ?? "";
@@ -595,6 +767,7 @@ var json = (response, status, body) => {
 };
 var authorized = (request) => request.headers.authorization === `Bearer ${token}`;
 var client = new OmlxClient;
+var system = new SystemSampler;
 var server = http.createServer(async (request, response) => {
   if (!authorized(request)) {
     json(response, 401, { error: "unauthorized" });
@@ -610,7 +783,7 @@ var server = http.createServer(async (request, response) => {
     return;
   }
   if (request.method === "GET" && url.pathname === "/snapshot") {
-    json(response, 200, await client.snapshot());
+    json(response, 200, { ...await client.snapshot(), system: system.sample() });
     return;
   }
   json(response, 404, { error: "not_found" });

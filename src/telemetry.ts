@@ -1,3 +1,5 @@
+import { parseSystemSnapshot, type SystemSnapshot } from './system.ts';
+
 export const TELEMETRY_PHASES = [
   'connecting',
   'reconnecting',
@@ -83,6 +85,9 @@ type TelemetryFields = {
   memoryPressureLevel: number | null;
   memoryPressureSource: string | null;
   sampledAt: number;
+  /** Service-local continuity counter. Never a runtime request identifier. */
+  traceEpoch: number | null;
+  system: SystemSnapshot | null;
 };
 
 export type AvailableTelemetry = TelemetryFields & {
@@ -171,6 +176,8 @@ const emptyFields = (sampledAt: number): TelemetryFields => ({
   memoryPressureLevel: null,
   memoryPressureSource: null,
   sampledAt,
+  traceEpoch: null,
+  system: null,
 });
 
 export const unavailableTelemetry = (
@@ -189,7 +196,10 @@ const arrayOfObjects = (value: unknown): JsonObject[] => (
 );
 
 const matchingModel = (models: JsonObject[], preferredModel: string | null): JsonObject | null => (
-  models.find((model) => (nonnegative(model.active_requests) ?? 0) > 0 || model.is_loading === true)
+  models.find((model) => Array.isArray(model.generating) && model.generating.length > 0)
+    ?? models.find((model) => Array.isArray(model.prefilling) && model.prefilling.length > 0)
+    ?? models.find((model) => (nonnegative(model.active_requests) ?? 0) > 0)
+    ?? models.find((model) => model.is_loading === true)
     ?? (preferredModel === null ? undefined : models.find((model) => model.id === preferredModel))
     ?? models[0]
     ?? null
@@ -237,8 +247,13 @@ const normalizeFlights = (model: JsonObject | null, lookup: JsonObject): FlightS
     processingElapsed: nonnegative(model.loading_elapsed_seconds),
   };
   const waiting = arrayOfObjects(model.waiting);
+  const prefilling = arrayOfObjects(model.prefilling);
+  const generatingFlights = arrayOfObjects(model.generating);
+  if (prefilling.length + generatingFlights.length > 1 || (nonnegative(model.active_requests) ?? 0) > 1) {
+    return { ...summary, phase: 'processing', message: 'Concurrent requests · per-request speed withheld' };
+  }
 
-  for (const prefill of arrayOfObjects(model.prefilling)) {
+  for (const prefill of prefilling) {
     const requestID = text(prefill.request_id);
     const waitingRequest = requestID === null
       ? null
@@ -253,7 +268,7 @@ const normalizeFlights = (model: JsonObject | null, lookup: JsonObject): FlightS
       ...summary,
       phase: 'prefill',
       message: prefill.progress_stale === true ? 'Prefill is active · waiting for fresh progress' : summary.message,
-      livePrefillTPS: firstNumber(prefill.speed),
+      livePrefillTPS: prefill.progress_stale === true ? null : firstNumber(prefill.speed),
       promptTokens,
       cachedTokens,
       prefillProgress: progress,
@@ -261,7 +276,7 @@ const normalizeFlights = (model: JsonObject | null, lookup: JsonObject): FlightS
     };
   }
 
-  for (const generating of arrayOfObjects(model.generating)) {
+  for (const generating of generatingFlights) {
     const generated = nonnegative(generating.generated_tokens) ?? 0;
     const elapsed = nonnegative(generating.elapsed_seconds) ?? 0;
     const age = nonnegative(generating.last_activity_age_seconds);
@@ -277,6 +292,8 @@ const normalizeFlights = (model: JsonObject | null, lookup: JsonObject): FlightS
         processingElapsed: nonnegative(generating.elapsed_seconds),
         promptTokens,
         cachedTokens,
+        completionTokens: nonnegative(generating.generated_tokens),
+        elapsedSeconds: nonnegative(generating.elapsed_seconds),
       };
       continue;
     }
@@ -292,7 +309,7 @@ const normalizeFlights = (model: JsonObject | null, lookup: JsonObject): FlightS
     };
   }
 
-  if (arrayOfObjects(model.activities).length > 0) {
+  if (arrayOfObjects(model.activities).length > 0 && summary.phase === 'idle') {
     summary = {
       ...summary,
       phase: 'processing',
@@ -302,14 +319,15 @@ const normalizeFlights = (model: JsonObject | null, lookup: JsonObject): FlightS
   if ((nonnegative(model.active_requests) ?? 0) > 0 && summary.phase === 'idle') {
     summary = { ...summary, phase: 'processing' };
   }
+  if (summary.cachedTokens !== null && (summary.promptTokens === null || summary.cachedTokens > summary.promptTokens)) {
+    summary.cachedTokens = null;
+  }
   return summary;
 };
 
 const normalizeWaiting = (models: JsonObject[], active: JsonObject): number => {
-  const reported = firstNumber(
-    active.total_waiting_requests,
-    ...models.map((model) => model.waiting_requests),
-  ) ?? 0;
+  const reported = nonnegative(active.total_waiting_requests)
+    ?? models.reduce((total, model) => total + (nonnegative(model.waiting_requests) ?? 0), 0);
   let overlap = 0;
   for (const model of models) {
     const activeIDs = new Set<string>();
@@ -328,7 +346,10 @@ const normalizeWaiting = (models: JsonObject[], active: JsonObject): number => {
 };
 
 const normalizeMemory = (active: JsonObject, model: JsonObject | null, cache: JsonObject): TelemetryMemory => ({
-  activeGB: gb(active.model_memory_used),
+  // model_memory_used changes meaning when the guard is disabled. Only the
+  // enabled guard's current_bytes is unambiguously a process footprint.
+  activeGB: asObject(active.memory_pressure)?.enabled === true
+    ? gb(asObject(active.memory_pressure)?.current_bytes) : null,
   peakGB: null,
   modelGB: gb(model?.actual_size),
   cacheGB: gb(cache.hot_cache_size_bytes),
@@ -371,7 +392,7 @@ export const normalizeOmlxTelemetry = (
 ): AvailableTelemetry | null => {
   const stats = asObject(statsValue);
   const savedActive = stats === null ? null : asObject(stats.active_models);
-  if (stats === null || savedActive === null || asObject(stats.engines) === null || finite(stats.total_requests) === null) {
+  if (stats === null || savedActive === null || asObject(stats.engines) === null) {
     return null;
   }
   let active = savedActive;
@@ -382,15 +403,16 @@ export const normalizeOmlxTelemetry = (
     active = freshActive;
   }
 
+  if (!Array.isArray(active.models)) return null;
   const models = arrayOfObjects(active.models);
-  if (models.length === 0) return null;
   const model = matchingModel(models, preferredModel);
   const modelID = text(model?.id);
   const cache = asObject(stats.runtime_cache) ?? {};
   const modelCache = arrayOfObjects(cache.models).find((candidate) => text(candidate.id) === modelID) ?? {};
   const lookup = asObject(modelCache.last_prefix_lookup) ?? {};
   const flight = normalizeFlights(model, lookup);
-  const activeRequests = firstNumber(active.total_active_requests, ...models.map((item) => item.active_requests)) ?? 0;
+  const activeRequests = nonnegative(active.total_active_requests)
+    ?? models.reduce((total, item) => total + (nonnegative(item.active_requests) ?? 0), 0);
   const queuedRequests = normalizeWaiting(models, active);
   const pressure = asObject(active.memory_pressure);
   const pressureName = text(pressure?.pressure_level);
@@ -423,7 +445,7 @@ export const normalizeOmlxTelemetry = (
     runtime: 'omlx',
     backendID: 'omlx',
     modelID,
-    phase: flight.phase === 'idle' && queuedRequests > 0 ? 'queued' : flight.phase,
+    phase: models.length === 0 ? 'notLoaded' : flight.phase === 'idle' && queuedRequests > 0 ? 'queued' : flight.phase,
     apiKeyRequired: true,
     sessionAveragePrefillTPS: firstNumber(stats.avg_prefill_tps),
     liveDecodeTPS: flight.liveDecodeTPS,
@@ -445,6 +467,8 @@ export const normalizeOmlxTelemetry = (
     memoryPressureLevel: pressureLevel,
     memoryPressureSource: pressureLevel === null ? null : 'oMLX process memory guard (not macOS pressure)',
     sampledAt,
+    traceEpoch: null,
+    system: null,
   };
 };
 
@@ -505,7 +529,7 @@ export const parseTelemetrySnapshot = (value: unknown): TelemetrySnapshot => {
     const safeReason = reason !== null && (TELEMETRY_REASONS as readonly string[]).includes(reason)
       ? reason as TelemetryReason
       : 'unparseable_snapshot';
-    return unavailableTelemetry(safeReason, text(record?.message), sampledAt);
+    return { ...unavailableTelemetry(safeReason, text(record?.message), sampledAt), system: parseSystemSnapshot(record?.system) };
   }
   const active = nonnegative(record.activeRequests) ?? 0;
   const queued = nonnegative(record.queuedRequests) ?? 0;
@@ -538,6 +562,8 @@ export const parseTelemetrySnapshot = (value: unknown): TelemetrySnapshot => {
     memoryPressureLevel: nonnegative(record.memoryPressureLevel),
     memoryPressureSource: text(record.memoryPressureSource),
     sampledAt,
+    traceEpoch: nonnegative(record.traceEpoch),
+    system: parseSystemSnapshot(record.system),
   };
 };
 
