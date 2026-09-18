@@ -41,10 +41,18 @@ OpenChamber/oMLX verification separately before declaring a release qualified.
 The panel uses the SDK guest bundler. The service uses stock `bun build` with
 `--target=node --format=esm --minify-whitespace`; function/variable names remain
 intact. The JSONC ESM import and extracted-Node-package smoke test must be kept.
-The reviewed uncompressed package allowance is 224 KiB. Changes must also bound polling, retained observations, and DOM growth; file size alone is not an efficiency measurement. Tests cover progress and
-preference races as well as the published SDK storage/clipboard message contracts.
+The reviewed uncompressed package allowance is 224 KiB. Changes must also bound
+polling, retained observations, and DOM growth; file size alone is not an
+efficiency measurement. Tests cover progress and preference races as well as the
+published SDK storage/clipboard message contracts.
 
 Prefill changes must cover missing counters, incomplete stages, cache reuse,
 stalled readings, and whole-token percentage boundaries. Preview failure
 responses must pass the pinned SDK parser; do not lengthen browser timeouts
 to compensate for an invalid synthetic host message.
+
+Concurrent-model fixtures must retain individual model readings while withholding
+ambiguous single-request headlines. Recent-history tests must distinguish a
+request leaving observation from successful completion. Capture the complete
+iframe content when reviewing long panels; clipped screenshots are not layout
+verification.
