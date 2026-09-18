@@ -22,7 +22,12 @@ func renderPreviews() throws {
     host.swapBytes = 1.2 * 1_073_741_824; host.thermal = "Nominal"
     host.batteryPercent = 92; host.powerSource = "Power adapter"
     let model = MonitorModel(preview: true)
-    model.setPreview(runtime: runtime, host: host, rates: (0..<90).map { i in 23.6 + sin(Double(i) / 8) + cos(Double(i) / 3) * 0.4 })
+    let rates: [Double?] = (0..<90).map { i in
+        let wave = sin(Double(i) / 8.0)
+        let ripple = cos(Double(i) / 3.0) * 0.4
+        return 23.6 + wave + ripple
+    }
+    model.setPreview(runtime: runtime, host: host, rates: rates)
     func export<V: View>(_ view: V, name: String, width: CGFloat, scheme: ColorScheme) throws {
         let canvas = view.environment(\.colorScheme, scheme).preferredColorScheme(scheme)
             .background(scheme == .dark ? Color(nsColor: .windowBackgroundColor) : Color.white)

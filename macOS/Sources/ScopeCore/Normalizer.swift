@@ -9,10 +9,10 @@ func nonnegative(_ value: Any?) -> Double? {
           n.doubleValue.isFinite, n.doubleValue >= 0 else { return nil }
     return n.doubleValue
 }
-func string(_ value: Any?) -> String? {
+func identifier(_ value: Any?) -> String? {
     guard let s = value as? String else { return nil }
     let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
-    return trimmed.isEmpty ? nil : String(trimmed.prefix(300))
+    return trimmed.isEmpty ? nil : trimmed
 }
 
 public enum Normalizer {
@@ -38,9 +38,9 @@ public enum Normalizer {
         // Subtract only overlap proven by the runtime's request identifiers.
         var overlap = 0
         for model in models {
-            let ids = Set(["prefilling", "generating", "activities"].flatMap { objects(model[$0]) }.compactMap { string($0["request_id"]) })
+            let ids = Set(["prefilling", "generating", "activities"].flatMap { objects(model[$0]) }.compactMap { identifier($0["request_id"]) })
             overlap += objects(model["waiting"]).filter { entry in
-                string(entry["request_id"]).map { ids.contains($0) } ?? false
+                identifier(entry["request_id"]).map { ids.contains($0) } ?? false
             }.count
         }
         result.queued = result.queued.map { max(0, $0 - Double(overlap)) }
@@ -49,7 +49,7 @@ public enum Normalizer {
             ?? models.first { (nonnegative($0["active_requests"]) ?? 0) > 0 }
             ?? models.first { $0["is_loading"] as? Bool == true } ?? models.first
         if let model {
-            result.model = string(model["id"])
+            result.model = identifier(model["id"]).map { String($0.prefix(300)) }
             result.modelBytes = nonnegative(model["actual_size"])
             let generating = objects(model["generating"]), prefilling = objects(model["prefilling"])
             let activeModels = models.filter { !objects($0["generating"]).isEmpty || !objects($0["prefilling"]).isEmpty || (nonnegative($0["active_requests"]) ?? 0) > 0 }.count
@@ -87,6 +87,11 @@ public enum Normalizer {
         if pressure["enabled"] as? Bool == true { result.processBytes = nonnegative(pressure["current_bytes"]) }
         result.ramCacheBytes = nonnegative(cache["hot_cache_size_bytes"])
         result.ssdCacheBytes = nonnegative(object(cache["cold_tier"])["physical_bytes"])
+        if result.ssdCacheBytes == nil, let physical = nonnegative(cache["total_size_bytes"]) {
+            let sidecars = objects(cache["models"]).reduce(0.0) { $0 + (nonnegative(object($1["gdn_staging"])["sidecar_size_bytes"]) ?? 0) }
+            let total = physical + sidecars
+            result.ssdCacheBytes = total.isFinite ? total : nil
+        }
         if statsValid {
             result.decodeAverage = nonnegative(session["avg_generation_tps"])
             result.prefillAverage = nonnegative(session["avg_prefill_tps"])
@@ -104,7 +109,7 @@ public enum Normalizer {
             for phase in ["prefilling", "generating"] {
                 for flight in objects(model[phase]) {
                     // JSON serialization prevents ambiguous delimiter collisions.
-                    let identity = [string(model["id"]) ?? "", phase, string(flight["request_id"]) ?? ""]
+                    let identity = [identifier(model["id"]) ?? "", phase, identifier(flight["request_id"]) ?? ""]
                     parts.append(String(data: (try? JSONSerialization.data(withJSONObject: identity)) ?? Data(), encoding: .utf8) ?? "")
                     if phase == "prefilling" { progress = nonnegative(flight["processed"]) }
                 }

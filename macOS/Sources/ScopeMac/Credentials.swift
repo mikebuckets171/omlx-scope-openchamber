@@ -37,8 +37,9 @@ struct SavedConnection {
     static func discover(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> Self {
         func json(_ path: String) -> [String: Any] {
             let url = home.appendingPathComponent(path)
-            guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= 1_000_000,
-                  let data = try? Data(contentsOf: url), data.count <= 1_000_000,
+            guard let handle = try? FileHandle(forReadingFrom: url) else { return [:] }
+            defer { try? handle.close() }
+            guard let data = try? handle.read(upToCount: 1_000_001), data.count <= 1_000_000,
                   let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
             return value
         }

@@ -34,6 +34,7 @@ public final class MonitorModel {
     @ObservationIgnored private var screenAsleep = false
     @ObservationIgnored private var started = false
     @ObservationIgnored private var failures = 0
+    @ObservationIgnored private var historySegment = 0
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
     public init(preview: Bool = false) {
@@ -88,6 +89,7 @@ public final class MonitorModel {
             observers.append(center.addObserver(forName: notification, object: nil, queue: .main) { [weak self] _ in
                 Task { @MainActor in
                     guard let self else { return }
+                    self.historySegment += 1
                     if screen { self.screenAsleep = value } else { self.asleep = value }
                     self.restart()
                 }
@@ -104,7 +106,7 @@ public final class MonitorModel {
         if value { visibleViews.insert(id) } else { visibleViews.remove(id) }
         if wasVisible != isVisible { restart() }
     }
-    public func togglePause() { paused.toggle(); restart() }
+    public func togglePause() { paused.toggle(); historySegment += 1; restart() }
     public func refresh() {
         guard started, !paused, !busy else { return }
         restart()
@@ -134,14 +136,14 @@ public final class MonitorModel {
         let machine = await sampler()
         if current == generation, !Task.isCancelled {
             host = machine
-            cpuHistory.append(time: machine.sampledAt, value: machine.cpu)
-            memoryHistory.append(time: machine.sampledAt, value: machine.memoryPercent)
+            cpuHistory.append(time: machine.sampledAt, value: machine.cpu, segment: historySegment)
+            memoryHistory.append(time: machine.sampledAt, value: machine.memoryPercent, segment: historySegment)
         }
         let reading = await response
         guard current == generation, !Task.isCancelled else { return }
         runtime = reading; samples += 1
         failures = reading.connected ? 0 : min(5, failures + 1)
-        speedHistory.append(time: reading.sampledAt, value: reading.rate, segment: reading.epoch)
+        speedHistory.append(time: reading.sampledAt, value: reading.rate, segment: reading.epoch &+ (historySegment &* 1_000_000))
     }
 
     public func saveConnection(endpoint text: String, newKey: String) {

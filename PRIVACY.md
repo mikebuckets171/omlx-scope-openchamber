@@ -45,3 +45,17 @@ numeric resource readings. Charts retain bounded in-memory history only.
 On remote OpenChamber installations, these readings describe the server host.
 Development-only path overrides are documented in the configuration guide;
 OpenChamber does not forward arbitrary environment variables to installed services.
+
+
+## Optional native Mac app
+
+The Mac app is a separate local client. It reads CPU and memory counters through
+public Mach/sysctl APIs, thermal and Low Power Mode from ProcessInfo, and battery
+information from IOPowerSources. It does not use private GPU or sensor APIs.
+Saved connection discovery reads only oMLX settings and the OpenCode oMLX API
+credential. New keys are stored in macOS Keychain; non-secret preferences use
+UserDefaults. Prompts, completions, and request IDs never enter display models.
+History is bounded and held in memory. Copied diagnostics contain version and
+connection state, not credentials, endpoint URLs, model names, or request data.
+There is no telemetry, cloud backend, background daemon, or automatic updater.
+The native app does not connect to the extension service or change OpenChamber.

@@ -6,7 +6,7 @@ A lightweight, read-only [oMLX](https://github.com/jundot/omlx) monitor for
 [OpenChamber](https://openchamber.dev). Follow inference activity, memory use,
 and CPU load without leaving your workspace.
 
-[Installation](#install) · [Configuration](docs/CONFIGURATION.md) ·
+[Installation](#install-the-openchamber-extension) · [Configuration](docs/CONFIGURATION.md) ·
 [Metric reference](docs/METRICS.md) · [Changelog](CHANGELOG.md)
 
 ## Features
@@ -20,9 +20,21 @@ and CPU load without leaving your workspace.
 - **Clear states:** missing values stay unavailable; paused and older readings
   are identified. Pause affects the monitor, never your model.
 
-No analytics, cloud backend, external fonts, or charting framework.
+No analytics, cloud backend, external fonts, or third-party charting framework.
+The leaf button reduces extension refresh frequency without pausing inference.
 
-## Install
+## Mac app
+
+The native Mac companion provides a monitoring window and menu-bar popover,
+with selectable token-speed, CPU, memory, or icon-only readouts. It uses SwiftUI
+and Apple’s resource APIs: no Electron, bundled Node runtime, or background daemon.
+
+Download **OMLX-Scope-macOS-0.5.2.zip** from Releases on an Apple Silicon Mac
+running macOS 14 or newer. Unzip and move **OMLX Scope.app** to Applications.
+The native app is currently an **ad-hoc-signed preview, not notarized**. See
+[Mac app setup](https://github.com/mikebuckets171/omlx-scope-openchamber/blob/main/macOS/README.md) for installation, connection, and verification limits.
+
+## Install the OpenChamber extension
 
 Requires **OpenChamber 1.24.0 or newer** on desktop or web, with oMLX running
 on the same host.
@@ -63,8 +75,8 @@ See [Privacy](PRIVACY.md) and [Security](SECURITY.md).
 
 Mac-specific readings are unavailable on other operating systems. GPU load,
 temperature, fan speed, and macOS memory pressure are not reported. The project
-uses OpenChamber's documented extension surfaces; it does not add a macOS
-menu-bar item or modify the host application.
+uses OpenChamber's documented extension surfaces. The optional native app owns
+its own menu-bar item; neither component modifies OpenChamber or oMLX.
 
 ## Development
 

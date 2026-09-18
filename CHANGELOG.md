@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.2 — 2026-09-17
+
+- Added an optional native Mac companion with a monitoring window and menu-bar popover.
+- Added selectable menu-bar readings, energy-saving updates, and sleep-aware sampling.
+- Added native CPU, memory, battery, and thermal-state readings using public macOS APIs.
+- Added Keychain-backed connection settings and sanitized diagnostics.
+- Added an energy-saving control to the OpenChamber extension.
+- Preserved the 0.5.1 packaged-service startup fix.
+
+The native companion is an ad-hoc-signed preview, not a notarized application.
+
 ## 0.5.1 — 2026-09-17
 
 - Fixed a service startup failure that left the monitor waiting for oMLX.
