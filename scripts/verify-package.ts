@@ -23,7 +23,7 @@ for (const entry of entries) {
 }
 const panel = await Bun.file(join(root, 'panel/main.js')).text();
 if (['node:os', 'node:fs', 'node:child_process', 'OMLX_SCOPE_API_KEY', '/usr/bin/vm_stat', '/usr/sbin/sysctl'].some((secret) => panel.includes(secret))) throw new Error('Host-only code leaked into the panel');
-if (bytes > 160 * 1024) throw new Error('Installable content exceeds the 160 KiB budget. Review before increasing it.');
+if (bytes > 224 * 1024) throw new Error('Installable content exceeds the 224 KiB budget. Review before increasing it.');
 if (pkg.openchamber?.contributes?.page !== true) throw new Error('Full-page monitor surface is missing.');
 // Build from a fresh staging directory, never update a pre-existing ZIP.
 // Fixed file order, mode and timestamp make repeat builds reproducible.

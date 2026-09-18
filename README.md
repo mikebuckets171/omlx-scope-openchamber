@@ -11,6 +11,16 @@ and CPU load without leaving your workspace.
 
 ## Features
 
+- **Prefill clarity:** percentage remaining, exact processed/total counts, and
+  oMLX's estimated time left for the current stage when reported.
+- **Recent generation speed:** a short observation-window rate alongside the
+  runtime's request average, so changes do not disappear into a long average.
+- **Recent generations:** up to eight last-seen observations with token counts,
+  reported average speed, and peak observed process footprint. Memory-only;
+  not a log of confirmed completions.
+- **Cache and model visibility:** reused versus unreused input, RAM/SSD cache
+  sizes, and a bounded roster showing simultaneous model activity.
+
 - **Prefill remaining:** a visible percentage and processed/total token counts for
   the current runtime stage. Missing and stale progress are labelled, never guessed.
 - **Chat-friendly controls:** a compact view, saved energy-saving preference, and
@@ -57,7 +67,7 @@ See [Configuration](docs/CONFIGURATION.md) for supported files and troubleshooti
 
 ## Optional Mac app
 
-The native companion remains at **0.5.2**; **0.5.3 is an extension-only update**.
+The native companion remains at **0.5.2**; **0.5.4 is an extension-only update**.
 
 The native Mac companion provides a monitoring window and menu-bar popover,
 with selectable token-speed, CPU, memory, or icon-only readouts. It uses SwiftUI

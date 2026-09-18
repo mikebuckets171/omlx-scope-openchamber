@@ -13,6 +13,7 @@ export const measurementReport = (snapshot: TelemetrySnapshot, system: SystemSna
     const progress = prefillReading(snapshot);
     if (progress) {
       lines.push(`Prefill: ${progress.remaining}${progress.stale || paused ? ' (last reading)' : ''} — current stage only`);
+      if (!paused && !progress.stale && snapshot.prefillETASeconds !== null) lines.push(`Prefill stage estimate: ${scalar(snapshot.prefillETASeconds, ' seconds')} (oMLX estimate, not a completion deadline)`);
       if (progress.counts) lines.push(`Prefill tokens: ${progress.counts.done} / ${progress.counts.total}; ${progress.counts.remaining} remaining`);
     }
     lines.push(`Generation (request average): ${scalar(snapshot.liveDecodeTPS, ' tok/s')}`,

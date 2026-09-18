@@ -73,3 +73,12 @@ contains measurement values, their age/state, and the extension version. Model
 identifiers, session titles, raw errors, paths, credentials, prompts, completions,
 and request identifiers are excluded. A failed clipboard request is not reported
 as a successful copy. No new permission is required.
+
+
+### Generation observations in the extension
+
+The extension can retain up to eight last-seen generation summaries in its current
+view's memory, including the displayed model name and numeric measurements. It does
+not persist these summaries, read chat content, or receive runtime request IDs.
+Closing/reloading the view clears them. Copy recent is an explicit user action and
+excludes model names, credentials, paths, and request identifiers.

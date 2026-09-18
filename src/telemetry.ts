@@ -60,6 +60,18 @@ export type TelemetryLifetime = {
   uptimeSeconds: number | null;
 };
 
+export type ResidentModel = {
+  id: string;
+  phase: TelemetryPhase;
+  activeRequests: number | null;
+  queuedRequests: number | null;
+  allocationGB: number | null;
+  tokensPerSecond: number | null;
+  prefillProgress: number | null;
+  progressStale: boolean;
+};
+export const MAX_RESIDENT_MODELS = 12;
+
 type TelemetryFields = {
   message: string | null;
   runtime: 'omlx' | null;
@@ -78,6 +90,7 @@ type TelemetryFields = {
   prefillProcessedTokens: number | null;
   prefillTotalTokens: number | null;
   prefillProgressStale: boolean;
+  prefillETASeconds: number | null;
   elapsedSeconds: number | null;
   activeRequests: number | null;
   queuedRequests: number | null;
@@ -91,6 +104,8 @@ type TelemetryFields = {
   /** Service-local continuity counter. Never a runtime request identifier. */
   traceEpoch: number | null;
   system: SystemSnapshot | null;
+  residentModels: ResidentModel[];
+  residentModelCount: number | null;
 };
 
 export type AvailableTelemetry = TelemetryFields & {
@@ -175,6 +190,7 @@ const emptyFields = (sampledAt: number): TelemetryFields => ({
   prefillProcessedTokens: null,
   prefillTotalTokens: null,
   prefillProgressStale: false,
+  prefillETASeconds: null,
   elapsedSeconds: null,
   activeRequests: null,
   queuedRequests: null,
@@ -187,6 +203,8 @@ const emptyFields = (sampledAt: number): TelemetryFields => ({
   sampledAt,
   traceEpoch: null,
   system: null,
+  residentModels: [],
+  residentModelCount: null,
 });
 
 export const unavailableTelemetry = (
@@ -226,6 +244,7 @@ type FlightSummary = {
   prefillProcessedTokens: number | null;
   prefillTotalTokens: number | null;
   prefillProgressStale: boolean;
+  prefillETASeconds: number | null;
   elapsedSeconds: number | null;
   processingElapsed: number | null;
 };
@@ -244,6 +263,7 @@ const normalizeFlights = (model: JsonObject | null, lookup: JsonObject, ambiguou
       prefillProcessedTokens: null,
       prefillTotalTokens: null,
       prefillProgressStale: false,
+      prefillETASeconds: null,
       elapsedSeconds: null,
       processingElapsed: null,
     };
@@ -271,6 +291,7 @@ const normalizeFlights = (model: JsonObject | null, lookup: JsonObject, ambiguou
       prefillProcessedTokens: null,
       prefillTotalTokens: null,
       prefillProgressStale: false,
+      prefillETASeconds: null,
       elapsedSeconds: null,
       processingElapsed: null,
     };
@@ -288,6 +309,7 @@ const normalizeFlights = (model: JsonObject | null, lookup: JsonObject, ambiguou
     prefillProcessedTokens: null,
     prefillTotalTokens: null,
     prefillProgressStale: false,
+    prefillETASeconds: null,
     elapsedSeconds: null,
     processingElapsed: nonnegative(model.loading_elapsed_seconds),
   };
@@ -323,6 +345,8 @@ const normalizeFlights = (model: JsonObject | null, lookup: JsonObject, ambiguou
       prefillProcessedTokens: progress !== null ? done : null,
       prefillTotalTokens: progress !== null ? total : null,
       prefillProgressStale: prefill.progress_stale === true,
+      prefillETASeconds: prefill.progress_stale !== true && progress !== null && progress < 1 && (nonnegative(prefill.speed) ?? 0) > 0
+        ? nonnegative(prefill.eta) : null,
       elapsedSeconds: firstNumber(prefill.elapsed),
     };
   }
@@ -512,7 +536,7 @@ export const normalizeOmlxTelemetry = (
     reason: null,
     message: flight.message,
     runtime: 'omlx',
-    modelID,
+    modelID: modelID?.slice(0, 256) ?? null,
     phase: models.length === 0 ? 'notLoaded' : flight.phase === 'idle' && queuedRequests !== null && queuedRequests > 0 ? 'queued' : flight.phase,
     sessionStatsState,
     sessionAveragePrefillTPS: firstNumber(statsData.avg_prefill_tps),
@@ -527,6 +551,7 @@ export const normalizeOmlxTelemetry = (
     prefillProcessedTokens: flight.prefillProcessedTokens,
     prefillTotalTokens: flight.prefillTotalTokens,
     prefillProgressStale: flight.prefillProgressStale,
+    prefillETASeconds: flight.prefillETASeconds,
     elapsedSeconds: flight.elapsedSeconds,
     activeRequests,
     queuedRequests,
@@ -539,6 +564,17 @@ export const normalizeOmlxTelemetry = (
     sampledAt,
     traceEpoch: null,
     system: null,
+    residentModelCount: models.length,
+    residentModels: models.slice(0, MAX_RESIDENT_MODELS).flatMap(item => {
+      const id = text(item.id);
+      if (id === null) return [];
+      const state = normalizeFlights(item, {});
+      const queue = normalizeWaiting([item], {});
+      return [{ id: id.slice(0, 256), phase: state.phase === 'idle' && (queue ?? 0) > 0 ? 'queued' : state.phase,
+        activeRequests: nonnegative(item.active_requests), queuedRequests: queue,
+        allocationGB: gb(item.actual_size), tokensPerSecond: state.liveDecodeTPS ?? state.livePrefillTPS,
+        prefillProgress: state.prefillProgress, progressStale: state.prefillProgressStale }];
+    }),
   };
 };
 
@@ -586,6 +622,20 @@ const normalizeLifetimeFromPanel = (value: unknown): TelemetryLifetime | null =>
   };
 };
 
+const parseResidentModels = (value: unknown): ResidentModel[] => {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, MAX_RESIDENT_MODELS).flatMap(entry => {
+    const item = asObject(entry), id = text(item?.id);
+    if (!item || !id) return [];
+    const phase = normalizePhase(item.phase), progressStale = item.progressStale === true;
+    const active = tokenCount(item.activeRequests);
+    return [{ id: id.slice(0, 256), phase, activeRequests: active,
+      queuedRequests: tokenCount(item.queuedRequests), allocationGB: nonnegative(item.allocationGB),
+      tokensPerSecond: (active ?? 0) <= 1 && (phase === 'decode' || phase === 'prefill' && !progressStale) ? nonnegative(item.tokensPerSecond) : null,
+      prefillProgress: phase === 'prefill' && (active ?? 0) <= 1 ? fraction(item.prefillProgress) : null, progressStale }];
+  });
+};
+
 /** Validate the service response before any value enters the DOM. */
 export const parseTelemetrySnapshot = (value: unknown, observedAt?: number): TelemetrySnapshot => {
   const record = asObject(value);
@@ -615,7 +665,7 @@ export const parseTelemetrySnapshot = (value: unknown, observedAt?: number): Tel
     reason: null,
     message: text(record.message),
     runtime: text(record.runtime) === 'omlx' ? 'omlx' : null,
-    modelID: text(record.modelID),
+    modelID: text(record.modelID)?.slice(0, 256) ?? null,
     phase,
     sessionStatsState,
     sessionAveragePrefillTPS: nonnegative(record.sessionAveragePrefillTPS),
@@ -630,6 +680,8 @@ export const parseTelemetrySnapshot = (value: unknown, observedAt?: number): Tel
     prefillProcessedTokens: progress !== null && phase === 'prefill' ? done : null,
     prefillTotalTokens: progress !== null && phase === 'prefill' ? total : null,
     prefillProgressStale: record.prefillProgressStale === true,
+    prefillETASeconds: phase === 'prefill' && progress !== null && progress < 1 && record.prefillProgressStale !== true
+      && (nonnegative(record.livePrefillTPS) ?? 0) > 0 ? nonnegative(record.prefillETASeconds) : null,
     elapsedSeconds: nonnegative(record.elapsedSeconds),
     activeRequests: active,
     queuedRequests: queued,
@@ -644,6 +696,8 @@ export const parseTelemetrySnapshot = (value: unknown, observedAt?: number): Tel
     sampledAt,
     traceEpoch: nonnegative(record.traceEpoch),
     system: parseSystemSnapshot(record.system),
+    residentModels: parseResidentModels(record.residentModels),
+    residentModelCount: tokenCount(record.residentModelCount),
   };
 };
 
