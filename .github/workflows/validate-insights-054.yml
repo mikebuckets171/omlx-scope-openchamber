@@ -1,0 +1,70 @@
+name: Refine inference preview coverage
+on:
+  push:
+    branches: [work/extension-0.5.4]
+    paths: [.github/workflows/validate-insights-054.yml]
+permissions:
+  contents: write
+jobs:
+  refine:
+    if: github.repository == 'mikebuckets171/omlx-scope-openchamber' && github.ref == 'refs/heads/work/extension-0.5.4'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: Improve realistic fixtures and image coverage
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('dev/preview.html'); s=p.read_text()
+          old="  if (phase === 'notLoaded') { payload.residentModels = []; payload.residentModelCount = 0; }"
+          assert s.count(old)==1
+          s=s.replace(old, """  // Concurrent models retain individual readings but no single-request headline.
+            if (params.get('multi') === '1' && ['decode','prefill','processing'].includes(phase)) {
+              payload.phase = 'processing'; payload.activeRequests = 2;
+              payload.message = 'Concurrent requests or models · per-request values withheld';
+              for (const key of ['liveDecodeTPS','livePrefillTPS','promptTokens','cachedTokens','completionTokens','elapsedSeconds','prefillETASeconds','prefillProgress','prefillProcessedTokens','prefillTotalTokens']) payload[key] = null;
+            }
+            if (params.get('multi') === 'resident') {
+              Object.assign(payload.residentModels[1], {phase:'idle',activeRequests:0,tokensPerSecond:null,prefillProgress:null});
+            }
+            payload.residentModels[0].activeRequests = ['decode','prefill','processing'].includes(phase) ? 1 : 0;
+            if (phase === 'prefill') payload.residentModels[0].tokensPerSecond = state === 'prefill-stale' ? null : 184.5;
+            if (phase === 'notLoaded') { payload.residentModels = []; payload.residentModelCount = 0; }""")
+          p.write_text(s)
+          p=Path('tests/browser/preview.ts'); s=p.read_text()
+          old="await expect(frame.locator('#resident-list')).toContainText('77% left');"
+          assert s.count(old)==1
+          s=s.replace(old, old+"\n  await expect(frame.locator('#rate')).toHaveText('—');\n  await expect(frame.locator('#activity')).toContainText('Concurrent requests');")
+          old='`theme=${theme}&multi=1&surface='
+          assert s.count(old)==1
+          s=s.replace(old,'`theme=${theme}&multi=resident&surface=')
+          old="    await frame.locator('main').screenshot({path: info.outputPath(`enhanced-${theme}-${width}.png`)});"
+          assert s.count(old)==1
+          s=s.replace(old,"""    // An iframe clips an element screenshot beyond its viewport. Resize the test
+              // viewport to the real content height rather than publishing cropped evidence.
+              const height = await frame.locator('main').evaluate(el => Math.ceil(el.getBoundingClientRect().height) + 40);
+              await page.setViewportSize({width, height});
+              await frame.locator('main').screenshot({path: info.outputPath(`enhanced-${theme}-${width}.png`)});
+              if (width === 320) {
+                await frame.locator('#compact').click();
+                await expect(frame.locator('#prefill-estimate')).toBeVisible();
+                await frame.locator('main').screenshot({path: info.outputPath(`enhanced-compact-${theme}.png`)});
+              }""")
+          p.write_text(s)
+          PY
+      - run: bun install --frozen-lockfile && bun run check
+      - name: Commit the focused preview corrections
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- panel/main.js service/main.js package.json bun.lock
+          git fetch origin work/extension-0.5.4
+          test "$(git rev-parse FETCH_HEAD)" = "$GITHUB_SHA"
+          git add dev/preview.html tests/browser/preview.ts
+          git rm .github/workflows/validate-insights-054.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Validate realistic concurrent-model states and complete screenshots'
+          git push origin HEAD:work/extension-0.5.4
