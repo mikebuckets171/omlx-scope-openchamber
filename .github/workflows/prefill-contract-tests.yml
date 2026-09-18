@@ -1,0 +1,88 @@
+name: Verify prefill and SDK contracts
+on:
+  push:
+    branches: [work/extension-0.5.3]
+    paths: [.github/workflows/prefill-contract-tests.yml]
+permissions:
+  contents: write
+jobs:
+  verify:
+    if: github.repository == 'mikebuckets171/omlx-scope-openchamber' && github.ref == 'refs/heads/work/extension-0.5.3'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: Add focused regressions
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('panel/progress.ts');s=p.read_text()
+          old="  const remaining = left > 0 && left < 1 ? '<1%' : `${100 - Math.floor(progress * 100)}%`;\n  const completed = progress > 0.99 && progress < 1 ? '>99%' : `${Math.floor(progress * 100)}%`;"
+          new="  // Decimal percentages such as 58 / 100 may land a few ulps below an integer.\n  const whole = progress === 1 ? 100 : Math.min(99, Math.floor(progress * 100 + Number.EPSILON * 100));\n  const remaining = left > 0 && left < 1 ? '<1%' : `${100 - whole}%`;\n  const completed = progress > 0.99 && progress < 1 ? '>99%' : `${whole}%`;"
+          assert s.count(old)==1
+          p.write_text(s.replace(old,new))
+          with Path('panel/progress.test.ts').open('a') as f:f.write('''
+
+          test('whole-token percentages do not lose a percent to floating-point representation', () => {
+            for (let done = 0; done <= 100; done++) {
+              const reading = raw({ processed: done, total: 100 });
+              expect(prefillReading(reading)).toMatchObject({ remaining: `${100 - done}% remaining`, completed: `${done}% complete` });
+            }
+          });
+          ''')
+          Path('panel/preview-contract.test.ts').write_text('''import { expect, test } from 'bun:test';
+          import { readHostMessage } from '@openchamber/sdk';
+          import { readFileSync } from 'node:fs';
+          import { runInNewContext } from 'node:vm';
+
+          type PreviewEvent = { source: unknown; data: Record<string, unknown> };
+
+          // Exercise the actual development fixture, not a duplicate protocol object.
+          // Only this repository's trusted inline script is evaluated in the test context.
+          test.each(['storage', 'clipboard'] as const)('preview %s failures match the pinned SDK wire contract', kind => {
+            const html = readFileSync(new URL('../dev/preview.html', import.meta.url), 'utf8');
+            const source = /<script>([\\s\\S]*?)<\\/script>/.exec(html)?.[1];
+            if (!source) throw Error('Preview script missing');
+            const replies: unknown[] = [];
+            const listeners: Array<(event: PreviewEvent) => void> = [];
+            const contentWindow = { postMessage: (message: unknown) => replies.push(message) };
+            const context = {
+              document: { querySelector: () => ({ contentWindow }) }, URLSearchParams,
+              location: { search: `?${kind}=fail`, origin: 'http://127.0.0.1:9999' },
+              window: { addEventListener: (_type: string, listener: (event: PreviewEvent) => void) => listeners.push(listener) },
+            };
+            runInNewContext(source, context, { timeout: 500 });
+            expect(listeners).toHaveLength(1);
+            listeners[0]!({ source: contentWindow, data: {
+              channel: 'openchamber.sdk', v: 1, id: 'fixture-failure',
+              type: kind === 'storage' ? 'storage' : 'clipboard-write',
+              payload: { op: 'set', key: 'view.compact', value: true, text: 'Fixture reading' },
+            } });
+            expect(replies).toHaveLength(1);
+            expect(readHostMessage(replies[0])).toMatchObject({
+              type: 'result', id: 'fixture-failure', ok: false,
+              code: 'HOST_REJECTED', error: `Fixture ${kind} failure`,
+            });
+          });
+          ''')
+          PY
+      - name: Check and regenerate bundle
+        run: bun install --frozen-lockfile && bun run check
+      - name: Commit verified source and generated bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin work/extension-0.5.3
+          test "$(git rev-parse FETCH_HEAD)" = "$GITHUB_SHA"
+          git diff --check
+          git diff --exit-code -- bun.lock service/main.js
+          git add panel/progress.ts panel/progress.test.ts panel/preview-contract.test.ts panel/main.js
+          git rm .github/workflows/prefill-contract-tests.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Verify percentage precision and SDK failure handling'
+          git push origin HEAD:work/extension-0.5.3
