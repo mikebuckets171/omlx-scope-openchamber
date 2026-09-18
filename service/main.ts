@@ -13,9 +13,9 @@ const system = new SystemSampler();
 const server = createScopeServer(token, {
   snapshot: () => client.snapshot(), system: () => system.sample(),
 });
-server.on('error', () => {
-  console.error('OMLX Scope could not start its local service.');
-  process.exitCode = 1;
+server.on('error', (error: NodeJS.ErrnoException) => {
+  console.error('OMLX Scope could not start its local service.', error);
+  process.exit(1);
 });
 let stopping = false;
 const stop = (): void => {

@@ -1,4 +1,4 @@
-import { parse, type ParseError } from 'jsonc-parser';
+import { parse, type ParseError } from 'jsonc-parser/lib/esm/main.js';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';

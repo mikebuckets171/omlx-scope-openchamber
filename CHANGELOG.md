@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.5.0 — Unreleased
+## 0.5.1 — 2026-09-17
+
+- Fixed a service startup failure that left the monitor waiting for oMLX.
+- Added clear startup error details and packaged-service regression checks.
+- No changes to the panel or Mac resource monitoring features.
+
+## 0.5.0 — 2026-09-17
 
 - Added a full-page monitor alongside the compact OpenChamber panel.
 - Added bounded CPU and memory history, Mac wired/compressed memory, and swap readings.

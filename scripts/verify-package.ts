@@ -31,8 +31,8 @@ const stage = mkdtempSync(join(tmpdir(), 'omlx-scope-package-'));
 const archive = join(root, 'dist', `${pkg.name}-${pkg.version}.zip`);
 const names = [...entries].sort();
 if (new Set(names).size !== names.length) throw new Error('Duplicate package entries.');
-const command = (file: string, args: string[], cwd = stage): string => {
-  const result = spawnSync(file, args, { cwd, encoding: 'utf8', timeout: 10_000, maxBuffer: 1_000_000, env: { ...process.env, TZ: 'UTC' } });
+const command = (file: string, args: string[], cwd = stage, timeout = 10_000): string => {
+  const result = spawnSync(file, args, { cwd, encoding: 'utf8', timeout, maxBuffer: 1_000_000, env: { ...process.env, TZ: 'UTC' } });
   if (result.error || result.status !== 0) throw new Error(`${file} failed: ${result.error?.message ?? result.stderr}`);
   return result.stdout;
 };
@@ -56,5 +56,6 @@ try {
     const copy = await Bun.file(join(extracted, name)).bytes();
     if (!Buffer.from(original).equals(Buffer.from(copy))) throw new Error(`ZIP content mismatch: ${name}`);
   }
+  process.stdout.write(command('node', [join(root, 'scripts/smoke-service.mjs'), extracted], extracted, 20_000));
   console.log(`PASS: SDK manifest, ${names.length} assets, ${(bytes / 1024).toFixed(1)} KiB; ZIP entries and extracted bytes verified; browser boundary clean.`);
 } finally { rmSync(stage, { recursive: true, force: true }); }
