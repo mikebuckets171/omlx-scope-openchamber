@@ -5,7 +5,7 @@ import ScopeMac
 
 // Developer-only native previews. Not part of OMLXScope.app.
 @MainActor
-func renderPreviews() throws {
+func renderPreviews() async throws {
     guard CommandLine.arguments.count == 2 else { fatalError("Pass an output directory.") }
     let root = URL(fileURLWithPath: CommandLine.arguments[1])
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -28,11 +28,10 @@ func renderPreviews() throws {
         return 23.6 + wave + ripple
     }
     model.setPreview(runtime: runtime, host: host, rates: rates)
-    func export<V: View>(_ view: V, name: String, width: CGFloat, scheme: ColorScheme) throws {
+    func export<V: View>(_ view: V, name: String, width: CGFloat, scheme: ColorScheme) async throws {
         let appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)!
         let canvas = view.environment(\.colorScheme, scheme).preferredColorScheme(scheme)
             .background(Color(nsColor: .windowBackgroundColor))
-        // NSHostingView includes native menus that ImageRenderer cannot capture.
         let hosting = NSHostingView(rootView: canvas)
         hosting.appearance = appearance
         let fitting = hosting.fittingSize
@@ -45,40 +44,59 @@ func renderPreviews() throws {
         hosting.frame = NSRect(origin: .zero, size: size)
         window.setContentSize(size)
         window.orderFrontRegardless()
+        defer { window.orderOut(nil); window.close() }
+        // Yield to SwiftUI/AppKit layout work; a nested synchronous run loop is insufficient.
+        try await Task.sleep(for: .milliseconds(350))
         hosting.layoutSubtreeIfNeeded()
         window.displayIfNeeded()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        let target = root.appendingPathComponent(name + ".png")
+        // Capture the actual test window when allowed. Never change system permissions.
+        let capture = Process()
+        capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+        capture.arguments = ["-x", "-o", "-l", String(window.windowNumber), target.path]
+        capture.standardOutput = FileHandle.nullDevice
+        capture.standardError = FileHandle.nullDevice
+        try capture.run()
+        let deadline = ProcessInfo.processInfo.systemUptime + 5
+        while capture.isRunning && ProcessInfo.processInfo.systemUptime < deadline {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        if capture.isRunning { capture.terminate(); throw NSError(domain: "ScopePreview", code: 2) }
+        if capture.terminationStatus == 0, FileManager.default.fileExists(atPath: target.path) {
+            print("Window capture \(name): \(Int(size.width)) × \(Int(size.height)) points")
+            return
+        }
+        // Some CI hosts deny screen recording. Keep the limited view capture explicit.
         var png: Data?
         appearance.performAsCurrentDrawingAppearance {
             guard let bitmap = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) else { return }
             hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
             png = bitmap.representation(using: .png, properties: [:])
         }
-        window.orderOut(nil); window.close()
         guard let png else { throw NSError(domain: "ScopePreview", code: 1) }
-        try png.write(to: root.appendingPathComponent(name + ".png"))
-        print("Rendered \(name): \(Int(size.width)) × \(Int(size.height)) points")
+        try png.write(to: target)
+        print("View-cache fallback \(name): screen capture unavailable; native materials may be incomplete")
     }
     for scheme in [ColorScheme.dark, .light] {
         NSApp.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
         let theme = scheme == .dark ? "dark" : "light"
-        try export(VStack(alignment: .leading, spacing: 22) {
+        try await export(VStack(alignment: .leading, spacing: 22) {
             HStack { Text("OMLX Scope").font(.title2.weight(.semibold)); Spacer(); Text("Preview data").font(.caption).foregroundStyle(.secondary) }
             OverviewContent(model: model)
         }.padding(30).frame(width: 850), name: "overview-\(theme)", width: 850, scheme: scheme)
-        try export(MonitorView(model: model).frame(width: 1050, height: 780), name: "workspace-\(theme)", width: 1050, scheme: scheme)
-        try export(MenuPopover(model: model), name: "menu-\(theme)", width: 345, scheme: scheme)
-        try export(ResourcesContent(model: model).padding(28).frame(width: 850), name: "resources-\(theme)", width: 850, scheme: scheme)
+        try await export(MonitorView(model: model).frame(width: 1050, height: 780), name: "workspace-\(theme)", width: 1050, scheme: scheme)
+        try await export(MenuPopover(model: model), name: "menu-\(theme)", width: 345, scheme: scheme)
+        try await export(ResourcesContent(model: model).padding(28).frame(width: 850), name: "resources-\(theme)", width: 850, scheme: scheme)
     }
     model.togglePause()
-    try export(MenuPopover(model: model), name: "menu-paused", width: 345, scheme: .light)
+    try await export(MenuPopover(model: model), name: "menu-paused", width: 345, scheme: .light)
     model.togglePause(); model.runtime = .unavailable("oMLX is not responding. Host resources are still available.")
-    try export(MenuPopover(model: model), name: "menu-offline", width: 345, scheme: .light)
+    try await export(MenuPopover(model: model), name: "menu-offline", width: 345, scheme: .light)
 }
 
 let application = NSApplication.shared
 Task { @MainActor in
-    do { try renderPreviews(); exit(0) }
+    do { try await renderPreviews(); exit(0) }
     catch { fputs("Native preview rendering failed: \(error)\n", stderr); exit(1) }
 }
 application.run()
