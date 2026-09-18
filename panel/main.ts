@@ -6,6 +6,10 @@ import { ResourceHistory, toGiB } from './resources.ts';
 import type { SystemSnapshot } from '../src/system.ts';
 import { unavailableForHostError, unavailableForServiceResponse } from './host-errors.ts';
 import { Poller } from './poller.ts';
+import { prefillReading } from './progress.ts';
+import { Preferences, type PreferenceKey } from './preferences.ts';
+import { measurementReport } from './report.ts';
+import { version } from '../package.json';
 
 const host = connectHost();
 const root = document.querySelector<HTMLElement>('#root');
@@ -19,6 +23,8 @@ root.innerHTML = `
     <div class="monitor-controls"><button id="efficiency" type="button" aria-label="Energy-saving updates" aria-pressed="false" title="Energy-saving updates: reduce monitoring refresh frequency"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 3c-8-1-13 3-10 9s10 1 10-9ZM4 16l8-8"/></svg></button><button id="pause" type="button" aria-pressed="false" title="Pause this monitor, not inference"><svg viewBox="0 0 20 20" aria-hidden="true"><path id="pause-symbol" d="M7 5v10M13 5v10"/></svg><span id="pause-label">Pause</span></button><button id="refresh" type="button" title="Refresh local telemetry" aria-label="Refresh local telemetry"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 7a6 6 0 1 0 .1 5M16 3v4h-4"/></svg></button></div>
   </header>
   <div class="connection"><span class="connection-dot" aria-hidden="true"></span><span id="connection" role="status">Connecting to oMLX</span><span class="local-tag">LOCAL / READ ONLY</span></div>
+  <div class="view-tools" aria-label="Monitor view options"><button id="compact" type="button" aria-pressed="false">Compact view</button><span id="cadence">Adaptive updates</span><button id="copy-stats" type="button" title="Copy readings only. No keys, chat text, model IDs, session names or paths.">Copy stats</button></div>
+  <p id="action-status" class="action-status" role="status" hidden></p>
   <p id="notice" class="notice" role="status" hidden></p>
   <div class="workspace">
   <section class="instrument" aria-label="Inference activity">
@@ -26,7 +32,13 @@ root.innerHTML = `
     <h2 id="model" translate="no">Your local model</h2>
     <div class="readout"><span id="rate" class="rate">—</span><span id="unit" class="unit">Waiting for telemetry</span></div>
     <p id="activity" class="activity">Verifying the approved local service.</p>
-    <div id="prefill-track" class="progress-track" role="progressbar" aria-label="Prompt reading progress" aria-valuemin="0" aria-valuemax="100" hidden><span></span></div>
+    <section id="prefill-progress" class="prefill-progress" aria-label="Prefill progress" hidden>
+      <div class="prefill-heading"><span>Prefill · current stage</span><span id="prefill-state">Live reading</span></div>
+      <div class="prefill-values"><strong id="prefill-remaining">—</strong><span id="prefill-completed">—</span></div>
+      <div id="prefill-track" class="progress-track" role="progressbar" aria-label="Prefill stage completed" aria-valuemin="0" aria-valuemax="100"><span></span></div>
+      <p id="prefill-counts" class="prefill-counts"></p>
+    </section>
+    <p id="request-output" class="request-output" hidden></p>
     <figure id="signal" class="signal" role="img" aria-label="No observed throughput yet">
       <div class="chart-top"><span id="chart-title">Request throughput</span><span id="ceiling">tok/s</span></div>
       <div class="plot"><svg viewBox="0 0 600 120" preserveAspectRatio="none" aria-hidden="true"><path class="grid" d="M4 4H596 M4 60H596 M4 116H596"/><g id="trace"></g><circle id="cursor" r="3" hidden/></svg><span id="chart-empty">The next request starts here.</span></div>
@@ -64,7 +76,7 @@ root.innerHTML = `
     <div><dt>Output tokens</dt><dd id="output">—</dd></div>
     <div><dt>Request elapsed</dt><dd id="elapsed">—</dd></div>
     <div><dt>Last cache lookup</dt><dd id="cache-lookup">—</dd></div>
-  </dl><p class="explanation">Throughput is the active request’s reported average—not instantaneous speed. Session averages cover completed work across models. Runtime memory guard is not macOS memory pressure. Memory uses GiB (1,024³ bytes). Compressed is physical compressor storage. Missing measurements stay unavailable.</p></details>
+  </dl><p class="explanation">Generation is the active request’s reported average; prefill is the runtime’s reported progress speed. Session averages cover completed work across models. Runtime memory guard is not macOS memory pressure. Memory uses GiB (1,024³ bytes). Compressed is physical compressor storage. Missing measurements stay unavailable.</p></details>
   </aside></div>
   <footer><span>Independent oMLX monitor</span><span id="freshness">Waiting for first sample</span></footer>
 </main>`;
@@ -83,6 +95,8 @@ const pauseButton = node('pause') as HTMLButtonElement;
 let lastSystem: SystemSnapshot | null = null;
 let userPaused = false;
 let efficient = false;
+let compactView = false;
+const preferences = new Preferences(host.storage);
 let freshnessTimer: ReturnType<typeof setTimeout> | null = null;
 let latest: TelemetrySnapshot = unavailableTelemetry('runtime_unreachable');
 let last: AvailableTelemetry | null = null;
@@ -124,11 +138,30 @@ const drawSignal = (now: number, live: boolean, phase: TelemetryPhase): void => 
     cursor.setAttribute('cx', String(geometry.latest.x)); cursor.setAttribute('cy', String(geometry.latest.y));
   } else cursor.setAttribute('hidden', '');
   hidden('chart-empty', points.length > 0);
-  text('chart-title', tracePhase === 'prefill' ? 'Prompt reading · reported average' : 'Generation · request average');
+  text('chart-title', tracePhase === 'prefill' ? 'Prefill · reported speed' : 'Generation · request average');
   text('ceiling', `${count(geometry.upper)} tok/s`);
   text('chart-state', points.length ? live ? 'Live observations' : 'Recent observations · not live' : 'Observed samples only');
   node('signal').dataset.live = String(live);
   node('signal').setAttribute('aria-label', points.length ? `${tracePhase} throughput over 90 seconds. ${points.length} observations. Latest ${rate(points.at(-1)?.rate)}. Gaps are not zero.` : 'No observed throughput in the last 90 seconds.');
+};
+
+const renderProgress = (current: AvailableTelemetry | null, held: false | 'paused' | 'refreshing' = false): void => {
+  const progress = prefillReading(current);
+  hidden('prefill-progress', progress === null);
+  if (!progress) return;
+  text('prefill-remaining', progress.remaining);
+  text('prefill-completed', progress.completed);
+  text('prefill-state', held ? held === 'paused' ? 'Paused · last reading' : 'Refreshing · last reading' : progress.stale ? 'Waiting for progress' : progress.percent === null ? 'Not reported' : 'Live reading');
+  node('prefill-progress').dataset.held = String(Boolean(held) || progress.stale);
+  if (progress.percent === null) {
+    node('prefill-track').removeAttribute('aria-valuenow');
+    node('prefill-track').setAttribute('aria-valuetext', 'Progress not reported');
+  } else {
+    node('prefill-track').setAttribute('aria-valuenow', String(Math.floor(progress.percent)));
+    node('prefill-track').setAttribute('aria-valuetext', `${progress.remaining}; ${progress.completed}${held || progress.stale ? '; last reading, not live' : ''}`);
+  }
+  (node('prefill-track').firstElementChild as HTMLElement).style.width = `${progress.percent ?? 0}%`;
+  text('prefill-counts', progress.counts ? `${progress.counts.done.toLocaleString()} / ${progress.counts.total.toLocaleString()} tokens processed · ${progress.counts.remaining.toLocaleString()} left` : 'Percent of the current prefill stage, not time remaining.');
 };
 
 const update = (snapshot: TelemetrySnapshot): void => {
@@ -151,12 +184,10 @@ const update = (snapshot: TelemetrySnapshot): void => {
   text('activity', stale ? snapshot.message ?? 'Start oMLX on this host, then refresh.' : current.message ?? (phase === 'idle' ? 'Model resident. Nothing running.' : phase === 'notLoaded' ? 'Server is healthy. No model is resident.' : `${count(current.activeRequests)} active · ${current.queuedRequests === null ? 'queue not reported' : current.queuedRequests ? `${current.queuedRequests} queued` : 'queue clear'}`));
   text('notice', stale ? last ? `${age(last.sampledAt)}. Retained details are not live.` : 'Read-only connection · check your local oMLX endpoint and credential.' : '');
   hidden('notice', !stale);
-  const progress = current?.phase === 'prefill' ? current.prefillProgress : null;
-  hidden('prefill-track', progress == null);
-  if (progress != null) {
-    node('prefill-track').setAttribute('aria-valuenow', String(Math.round(Math.min(1, progress) * 100)));
-    (node('prefill-track').firstElementChild as HTMLElement).style.width = `${Math.min(1, progress) * 100}%`;
-  }
+  renderProgress(current);
+  const hasOutput = current !== null && ['decode', 'processing'].includes(current.phase) && current.completionTokens !== null;
+  hidden('request-output', !hasOutput);
+  text('request-output', hasOutput ? `${current.completionTokens!.toLocaleString()} output tokens${current.elapsedSeconds !== null ? ` · ${number.format(current.elapsedSeconds)}s elapsed` : ''}` : '');
   const contextPercent = ratio(current?.promptTokens, current?.contextWindow);
   const reusedPercent = ratio(current?.cachedTokens, current?.promptTokens);
   text('context', percent(contextPercent)); text('context-detail', current?.promptTokens == null ? 'Not reported' : `${count(current.promptTokens)} / ${count(current.contextWindow)}`);
@@ -191,11 +222,13 @@ const update = (snapshot: TelemetrySnapshot): void => {
     text('native-freshness', native ? `${age(native.sampledAt)} · native readings up to every 10s` : 'Native diagnostics unavailable on this host');
   }
   resources.observe(snapshot.system);
-  document.getElementById('cpu-history')!.setAttribute('d', resources.paths('cpu', Date.now()));
-  document.getElementById('ram-history')!.setAttribute('d', resources.paths('memory', Date.now()));
+  if (!compactView) {
+    document.getElementById('cpu-history')!.setAttribute('d', resources.paths('cpu', Date.now()));
+    document.getElementById('ram-history')!.setAttribute('d', resources.paths('memory', Date.now()));
+  }
   text('resource-state', snapshot.system ? 'Whole-host observations' : 'Recent observations · not live');
-  signal.observe(snapshot);
-  drawSignal(Date.now(), liveRate !== null && !stale, phase);
+  signal.observe(snapshot, efficient ? 3_000 : 500);
+  if (!compactView) drawSignal(Date.now(), liveRate !== null && !stale, phase);
 };
 
 const poller = new Poller(async () => {
@@ -252,14 +285,41 @@ pauseButton.addEventListener('click', () => {
   text('machine-freshness', userPaused ? 'Frozen reading' : 'Refreshing');
   text('freshness', userPaused ? 'Monitoring paused' : 'Refreshing');
   drawSignal(Date.now(), false, latest.phase);
+  renderProgress(latest.available ? latest : null, userPaused ? 'paused' : 'refreshing');
   syncMonitoring();
 });
 
-document.getElementById('efficiency')!.addEventListener('click', (event) => {
-  efficient = !efficient;
-  (event.currentTarget as HTMLButtonElement).setAttribute('aria-pressed', String(efficient));
-  shell.dataset.efficient = String(efficient);
-  armFreshness();
+const actionStatus = (message: string): void => { text('action-status', message); hidden('action-status', !message); };
+const applyPreference = (key: PreferenceKey, value: boolean): void => {
+  if (disposed) return;
+  if (key === 'efficient') {
+    efficient = value; shell.dataset.efficient = String(value);
+    node('efficiency').setAttribute('aria-pressed', String(value));
+    text('cadence', value ? 'Energy saving · 3s+' : 'Adaptive updates');
+    signal.break(); armFreshness();
+  } else {
+    compactView = value; shell.dataset.compact = String(value);
+    node('compact').setAttribute('aria-pressed', String(value));
+    if (!value && !userPaused) update(latest);
+  }
+};
+const savePreference = (key: PreferenceKey, value: boolean): void => {
+  applyPreference(key, value);
+  actionStatus('');
+  void preferences.set(key, value).catch(() => {
+    if (!disposed) actionStatus('View changed here, but this host could not save the preference.');
+  });
+};
+node('efficiency').addEventListener('click', () => savePreference('efficient', !efficient));
+node('compact').addEventListener('click', () => savePreference('compact', !compactView));
+node('copy-stats').addEventListener('click', async () => {
+  const copy = node('copy-stats') as HTMLButtonElement;
+  copy.disabled = true;
+  try {
+    await host.writeClipboard(measurementReport(latest, lastSystem, userPaused, version));
+    if (!disposed) actionStatus('Readings copied. No credentials or chat content included.');
+  } catch { if (!disposed) actionStatus('Could not copy readings. The clipboard was not confirmed.'); }
+  finally { if (!disposed) copy.disabled = false; }
 });
 
 button.addEventListener('click', () => {
@@ -274,6 +334,7 @@ host.onReady((ready) => {
   shell.dataset.surface = ready.surface;
   if (mounted) return;
   mounted = true;
+  void preferences.load(applyPreference);
   syncMonitoring();
   poller.start();
 });

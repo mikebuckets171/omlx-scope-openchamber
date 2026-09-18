@@ -75,6 +75,9 @@ type TelemetryFields = {
   cachedTokens: number | null;
   completionTokens: number | null;
   prefillProgress: number | null;
+  prefillProcessedTokens: number | null;
+  prefillTotalTokens: number | null;
+  prefillProgressStale: boolean;
   elapsedSeconds: number | null;
   activeRequests: number | null;
   queuedRequests: number | null;
@@ -119,6 +122,15 @@ const nonnegative = (value: unknown): number | null => {
   return number !== null && number >= 0 ? number : null;
 };
 
+const tokenCount = (value: unknown): number | null => {
+  const number = nonnegative(value);
+  return number !== null && Number.isSafeInteger(number) ? number : null;
+};
+const fraction = (value: unknown): number | null => {
+  const number = nonnegative(value);
+  return number !== null && number <= 1 ? number : null;
+};
+
 const text = (value: unknown): string | null => {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
@@ -160,6 +172,9 @@ const emptyFields = (sampledAt: number): TelemetryFields => ({
   cachedTokens: null,
   completionTokens: null,
   prefillProgress: null,
+  prefillProcessedTokens: null,
+  prefillTotalTokens: null,
+  prefillProgressStale: false,
   elapsedSeconds: null,
   activeRequests: null,
   queuedRequests: null,
@@ -208,6 +223,9 @@ type FlightSummary = {
   cachedTokens: number | null;
   completionTokens: number | null;
   prefillProgress: number | null;
+  prefillProcessedTokens: number | null;
+  prefillTotalTokens: number | null;
+  prefillProgressStale: boolean;
   elapsedSeconds: number | null;
   processingElapsed: number | null;
 };
@@ -223,6 +241,9 @@ const normalizeFlights = (model: JsonObject | null, lookup: JsonObject, ambiguou
       cachedTokens: null,
       completionTokens: null,
       prefillProgress: null,
+      prefillProcessedTokens: null,
+      prefillTotalTokens: null,
+      prefillProgressStale: false,
       elapsedSeconds: null,
       processingElapsed: null,
     };
@@ -247,6 +268,9 @@ const normalizeFlights = (model: JsonObject | null, lookup: JsonObject, ambiguou
       cachedTokens: null,
       completionTokens: null,
       prefillProgress: null,
+      prefillProcessedTokens: null,
+      prefillTotalTokens: null,
+      prefillProgressStale: false,
       elapsedSeconds: null,
       processingElapsed: null,
     };
@@ -261,8 +285,11 @@ const normalizeFlights = (model: JsonObject | null, lookup: JsonObject, ambiguou
     cachedTokens: null,
     completionTokens: null,
     prefillProgress: null,
+    prefillProcessedTokens: null,
+    prefillTotalTokens: null,
+    prefillProgressStale: false,
     elapsedSeconds: null,
-      processingElapsed: nonnegative(model.loading_elapsed_seconds),
+    processingElapsed: nonnegative(model.loading_elapsed_seconds),
   };
   if (ambiguous) {
     return { ...summary, phase: 'processing', message: 'Concurrent requests or models · per-request values withheld' };
@@ -280,11 +307,11 @@ const normalizeFlights = (model: JsonObject | null, lookup: JsonObject, ambiguou
       ? null
       : waiting.find((candidate) => candidate.request_id === requestID) ?? null;
     const matchesLookup = requestID !== null && requestID === text(lookup.request_id);
-    const total = nonnegative(prefill.total);
-    const done = nonnegative(prefill.processed);
+    const total = tokenCount(prefill.total);
+    const done = tokenCount(prefill.processed);
     const promptTokens = firstNumber(prefill.prompt_tokens, waitingRequest?.prompt_tokens, matchesLookup ? lookup.prompt_tokens : null);
     const cachedTokens = firstNumber(prefill.cached_tokens, matchesLookup ? lookup.reused_kv_tokens : null);
-    const progress = done !== null && total !== null ? Math.min(1, done / Math.max(1, total)) : null;
+    const progress = done !== null && total !== null && total > 0 && done <= total ? done / total : null;
     summary = {
       ...summary,
       phase: 'prefill',
@@ -293,6 +320,9 @@ const normalizeFlights = (model: JsonObject | null, lookup: JsonObject, ambiguou
       promptTokens,
       cachedTokens,
       prefillProgress: progress,
+      prefillProcessedTokens: progress !== null ? done : null,
+      prefillTotalTokens: progress !== null ? total : null,
+      prefillProgressStale: prefill.progress_stale === true,
       elapsedSeconds: firstNumber(prefill.elapsed),
     };
   }
@@ -494,6 +524,9 @@ export const normalizeOmlxTelemetry = (
     cachedTokens: flight.cachedTokens,
     completionTokens: flight.completionTokens,
     prefillProgress: flight.prefillProgress,
+    prefillProcessedTokens: flight.prefillProcessedTokens,
+    prefillTotalTokens: flight.prefillTotalTokens,
+    prefillProgressStale: flight.prefillProgressStale,
     elapsedSeconds: flight.elapsedSeconds,
     activeRequests,
     queuedRequests,
@@ -568,15 +601,22 @@ export const parseTelemetrySnapshot = (value: unknown, observedAt?: number): Tel
   const sessionStatsState = statsState !== null && (TELEMETRY_STATS_STATES as readonly string[]).includes(statsState)
     ? statsState as TelemetryStatsState
     : 'unavailable';
+  const phase = normalizePhase(record.phase);
   const active = nonnegative(record.activeRequests);
   const queued = nonnegative(record.queuedRequests);
+  const done = tokenCount(record.prefillProcessedTokens);
+  const total = tokenCount(record.prefillTotalTokens);
+  const hasCounts = record.prefillProcessedTokens != null || record.prefillTotalTokens != null;
+  const progress = hasCounts
+    ? done !== null && total !== null && total > 0 && done <= total ? done / total : null
+    : fraction(record.prefillProgress);
   return {
     available: true,
     reason: null,
     message: text(record.message),
     runtime: text(record.runtime) === 'omlx' ? 'omlx' : null,
     modelID: text(record.modelID),
-    phase: normalizePhase(record.phase),
+    phase,
     sessionStatsState,
     sessionAveragePrefillTPS: nonnegative(record.sessionAveragePrefillTPS),
     liveDecodeTPS: nonnegative(record.liveDecodeTPS),
@@ -586,7 +626,10 @@ export const parseTelemetrySnapshot = (value: unknown, observedAt?: number): Tel
     promptTokens: nonnegative(record.promptTokens),
     cachedTokens: nonnegative(record.cachedTokens),
     completionTokens: nonnegative(record.completionTokens),
-    prefillProgress: nonnegative(record.prefillProgress),
+    prefillProgress: phase === 'prefill' ? progress : null,
+    prefillProcessedTokens: progress !== null && phase === 'prefill' ? done : null,
+    prefillTotalTokens: progress !== null && phase === 'prefill' ? total : null,
+    prefillProgressStale: record.prefillProgressStale === true,
     elapsedSeconds: nonnegative(record.elapsedSeconds),
     activeRequests: active,
     queuedRequests: queued,

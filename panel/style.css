@@ -153,3 +153,28 @@ footer { color: var(--oc-muted); font-size: 9px; margin-top: 14px; }
 #efficiency:hover, #efficiency[aria-pressed="true"] { color:var(--scope-accent); background:var(--scope-surface); }
 .scope[data-surface="page"] .instrument { min-width:0; }
 @media (min-width:900px) { .scope[data-surface="page"] #model { font-size:25px; line-height:1.4; } .scope[data-surface="page"] .activity { font-size:12px; line-height:1.65; } }
+
+/* Observation-driven prefill detail: no simulated progress or animation loop. */
+.view-tools { display:flex; align-items:center; gap:10px; margin:14px 0 0; }
+.view-tools button { color:var(--oc-muted); background:transparent; border:1px solid var(--scope-line); border-radius:7px; padding:5px 8px; font:inherit; font-size:10px; cursor:pointer; }
+.view-tools button:hover, #compact[aria-pressed="true"] { color:var(--scope-accent); background:var(--scope-surface); }
+#cadence { color:var(--oc-muted); font-size:9px; margin-left:auto; }
+.action-status { font-size:10px; color:var(--oc-muted); line-height:1.6; margin-top:10px; }
+.prefill-progress { padding:16px; margin-top:20px; border:1px solid var(--scope-line); background:var(--scope-surface); border-radius:12px; }
+.prefill-heading { display:flex; justify-content:space-between; gap:8px; font-size:10px; color:var(--oc-muted); }
+.prefill-values { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:10px; margin-top:10px; font-variant-numeric:tabular-nums; }
+#prefill-remaining { font-size:24px; letter-spacing:-.7px; font-weight:550; }
+#prefill-completed { font-size:11px; white-space:nowrap; color:var(--oc-muted); }
+.prefill-progress .progress-track { height:5px; margin-top:13px; }
+.prefill-counts { font:10px/1.6 var(--oc-mono,monospace); color:var(--oc-muted); margin-top:10px; }
+.prefill-progress[data-held="true"] { color:var(--oc-muted); }
+.request-output { margin-top:12px; font:11px/1.6 var(--oc-mono,monospace); color:var(--oc-muted); }
+.scope[data-compact="true"] .signal, .scope[data-compact="true"] .resource-trace,
+.scope[data-compact="true"] .machine-explanation, .scope[data-compact="true"] .session,
+.scope[data-compact="true"] .details { display:none; }
+.scope[data-compact="true"] .instrument { margin-top:18px; }
+.scope[data-compact="true"] .readout { margin-top:16px; min-height:56px; }
+.scope[data-compact="true"] .rate { font-size:46px; }
+.scope[data-compact="true"] .machine { margin-top:18px; }
+.scope[data-compact="true"] .metrics { padding-top:16px; padding-bottom:16px; }
+@media (max-width:370px) { #prefill-remaining { font-size:21px; } .prefill-progress { padding:12px; } #cadence { font-size:8px; } .view-tools { gap:6px; } }

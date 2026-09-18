@@ -100,7 +100,9 @@ describe('OMLX Scope service client', () => {
   it('observes prefill staleness and opaque request continuity without leaking IDs', async () => {
     let now = 100_000;
     let requestID = 'private-original';
-    const active = () => ({ models: [{ id: 'fixture', active_requests: 1, prefilling: [{ request_id: requestID, processed: 5, total: 100, speed: 50 }] }] });
+    let total = 100;
+    let phase = 'prefill';
+    const active = () => ({ models: [{ id: 'fixture', active_requests: 1, prefilling: [{ request_id: requestID, processed: 5, total, phase, speed: 50 }] }] });
     const client = new OmlxClient({ now: () => now, readConfig: async () => config, fetchImpl: async (url) => {
       if (String(url).endsWith('/health')) return response({ status: 'healthy', engine_pool: { model_count: 1 } });
       if (String(url).endsWith('/login')) return response({}, { headers: { 'set-cookie': 'omlx_admin_session=fixture;' } });
@@ -111,7 +113,14 @@ describe('OMLX Scope service client', () => {
     const first = await client.snapshot();
     expect(first.livePrefillTPS).toBe(50);
     now += 16_000;
-    expect((await client.snapshot()).livePrefillTPS).toBeNull();
+    const stale = await client.snapshot();
+    expect(stale.livePrefillTPS).toBeNull();
+    expect(stale.prefillProgressStale).toBe(true);
+    total = 200; phase = 'next-stage'; now += 500;
+    const stage = await client.snapshot();
+    expect(stage.prefillProgressStale).toBe(false);
+    expect(stage.traceEpoch).not.toBe(stale.traceEpoch);
+    expect(stage.prefillProgress).toBe(0.025);
     requestID = 'private-next';
     now += 500;
     const next = await client.snapshot();

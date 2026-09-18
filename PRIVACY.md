@@ -59,3 +59,17 @@ History is bounded and held in memory. Copied diagnostics contain version and
 connection state, not credentials, endpoint URLs, model names, or request data.
 There is no telemetry, cloud backend, background daemon, or automatic updater.
 The native app does not connect to the extension service or change OpenChamber.
+
+
+## Extension view preferences and clipboard
+
+Only two booleans (compact view and energy saving) are saved through OpenChamber's
+extension storage, on explicit preference changes. They are read once per mount;
+no history, runtime identifiers, or credentials are saved there. Changes in another
+view are picked up when this view is reopened, not by a background watcher.
+
+**Copy stats** uses the SDK's host clipboard only after a click. Its allowlist
+contains measurement values, their age/state, and the extension version. Model
+identifiers, session titles, raw errors, paths, credentials, prompts, completions,
+and request identifiers are excluded. A failed clipboard request is not reported
+as a successful copy. No new permission is required.

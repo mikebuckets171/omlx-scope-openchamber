@@ -4,7 +4,10 @@
 const frame = document.querySelector('iframe');
 const params = new URLSearchParams(location.search);
 const light = params.get('theme') === 'light';
-const state = params.get('state') || 'decode';
+let state = params.get('state') || 'decode';
+window.setPreviewState = value => { state = value; };
+window.previewCopied = '';
+window.previewWrites = 0;
 const sessionItem = params.get('item') === 'session' ? {kind:'session', action:'open-omlx-scope', sessionId:'synthetic-session', sessionTitle:params.get('sessionTitle') || 'Synthetic session', directory:null} : null;
 let samples = 0;
 window.previewRequests = 0;
@@ -25,11 +28,24 @@ window.addEventListener('message', (event) => {
   const m = event.data;
 if(m.type === 'hello') { post({type:'ready',payload:{theme:{mode:light?'light':'dark',tokens},locale:'en-US',directory:null,session:null,surface:params.get('surface') === 'page' ? 'page' : 'panel',connection:{connected:true,account:''},settings:{},item:sessionItem}}); return; }
   if(m.type === 'service-status') { post({type:'result',id:m.id,ok:true,payload:{status:'ready'}}); return; }
+  if(m.type === 'storage') {
+    const {op,key,value} = m.payload;
+    if(params.get('storage') === 'fail') { post({type:'result',id:m.id,ok:false,code:'HOST_REJECTED',error:'Fixture storage failure'}); return; }
+    const stored = sessionStorage.getItem(key);
+    if(op === 'set') { sessionStorage.setItem(key, JSON.stringify(value)); window.previewWrites += 1; }
+    const payload = op === 'get' ? {storage:true,op,found:stored !== null,...(stored === null ? {} : {value:JSON.parse(stored)})} : {storage:true,op};
+    post({type:'result',id:m.id,ok:true,payload}); return;
+  }
+  if(m.type === 'clipboard-write') {
+    if(params.get('clipboard') === 'fail') { post({type:'result',id:m.id,ok:false,code:'HOST_REJECTED',error:'Fixture clipboard failure'}); return; }
+    window.previewCopied = m.payload.text;
+    post({type:'result',id:m.id,ok:true,payload:null}); return;
+  }
   if(m.type !== 'service-request') return;
   window.previewRequests += 1;
   samples += 1;
   if (state === 'stalled' && samples > 2) return;
-  const phase = state === 'stalled' ? 'decode' : state === 'reconnect' ? samples > 4 ? 'offline' : 'decode' : state;
+  const phase = state === 'prefill-stale' || state === 'prefill-missing' || state === 'prefill-malformed' ? 'prefill' : state === 'stalled' ? 'decode' : state === 'reconnect' ? samples > 4 ? 'offline' : 'decode' : state;
   const available = !['offline','auth'].includes(phase);
   const payload = {
     available, reason: available ? null : phase === 'auth' ? 'authentication_failed' : 'runtime_unreachable',
@@ -37,9 +53,9 @@ if(m.type === 'hello') { post({type:'ready',payload:{theme:{mode:light?'light':'
     runtime:'omlx',phase,sessionStatsState:params.get('stats') || 'fresh',
     modelID:phase === 'notLoaded' ? null : params.get('long') ? 'publisher/a-very-long-model-name-with-a-large-context-window-and-quantization-details-27B-4bit' : 'Qwen3.8-27B-4bit',
     liveDecodeTPS:phase === 'decode' ? 24.6 + Math.sin(samples / 3) * 1.4 : null,
-    livePrefillTPS:phase === 'prefill' ? 184.5 : null, sessionAverageDecodeTPS:23.2, sessionAveragePrefillTPS:184.5,sessionCacheEfficiencyPercent:82.3,
+    livePrefillTPS:phase === 'prefill' && state !== 'prefill-stale' ? 184.5 : null, sessionAverageDecodeTPS:23.2, sessionAveragePrefillTPS:184.5,sessionCacheEfficiencyPercent:82.3,
     promptTokens:['decode','prefill'].includes(phase)?52100:null,cachedTokens:['decode','prefill'].includes(phase)?43000:null,completionTokens:phase==='decode'?6482+samples*12:null,
-    prefillProgress:phase==='prefill'?.64:null, elapsedSeconds:phase==='decode'?260+samples/2:null,activeRequests:['decode','prefill','processing'].includes(phase)?1:0,queuedRequests:phase==='queued'?2:0,contextWindow:131072,
+    prefillProgress:phase==='prefill' && state!=='prefill-missing'?.64:null,prefillProcessedTokens:phase==='prefill' ? state==='prefill-missing'?null:5824 :null,prefillTotalTokens:phase==='prefill' ? state==='prefill-missing'?null:state==='prefill-malformed'?0:9100:null,prefillProgressStale:state==='prefill-stale', elapsedSeconds:phase==='decode'?260+samples/2:null,activeRequests:['decode','prefill','processing'].includes(phase)?1:0,queuedRequests:phase==='queued'?2:0,contextWindow:131072,
     memory:{activeGB:34.5,modelGB:17.1,cacheGB:3.2,peakGB:null},sessionBank:{hot:{entries:7,totalGB:3.2},cold:{entries:188,totalGB:22.4},lastMissReason:'prefix_hit'},
     memoryPressureLevel:1,memoryPressureSource:'oMLX process memory guard',lifetime:{requestsTotal:381,uptimeSeconds:51420},sampledAt:Date.now(),traceEpoch:1,
     system: params.get('system') === 'missing' ? null : {

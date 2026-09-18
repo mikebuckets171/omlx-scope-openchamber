@@ -45,3 +45,14 @@ test('polling is bounded, adaptive, and backs off failures', () => {
   expect(nextDelay(null, 0)).toBe(2_000);
   expect(nextDelay(null, 10)).toBe(15_000);
 });
+
+
+test('energy-saving history joins its scheduled samples but still breaks real gaps', () => {
+  const history = new SignalHistory();
+  history.observe(sample(1000), 3000); history.observe(sample(4300), 3000);
+  history.observe(sample(7600), 3000); history.observe(sample(14000), 3000);
+  expect(history.points.map(point => point.segment)).toEqual([1, 1, 1, 2]);
+  expect(traceGeometry(history.points, 14000).paths[0]).toContain('L');
+  history.break(); history.observe(sample(15000), 3000);
+  expect(history.points.at(-1)?.segment).toBe(3);
+});

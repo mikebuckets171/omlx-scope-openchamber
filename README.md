@@ -11,6 +11,10 @@ and CPU load without leaving your workspace.
 
 ## Features
 
+- **Prefill remaining:** a visible percentage and processed/total token counts for
+  the current runtime stage. Missing and stale progress are labelled, never guessed.
+- **Chat-friendly controls:** a compact view, saved energy-saving preference, and
+  a Copy stats action that excludes credentials, chat text, model names, and paths.
 - **Inference activity:** request phase, reported token speed, context usage,
   prefix reuse, and a 90-second history.
 - **Mac resources:** CPU load, memory occupancy, wired and compressed memory,
@@ -22,17 +26,6 @@ and CPU load without leaving your workspace.
 
 No analytics, cloud backend, external fonts, or third-party charting framework.
 The leaf button reduces extension refresh frequency without pausing inference.
-
-## Mac app
-
-The native Mac companion provides a monitoring window and menu-bar popover,
-with selectable token-speed, CPU, memory, or icon-only readouts. It uses SwiftUI
-and Apple’s resource APIs: no Electron, bundled Node runtime, or background daemon.
-
-Download **OMLX-Scope-macOS-0.5.2.zip** from Releases on an Apple Silicon Mac
-running macOS 14 or newer. Unzip and move **OMLX Scope.app** to Applications.
-The native app is currently an **ad-hoc-signed preview, not notarized**. See
-[Mac app setup](https://github.com/mikebuckets171/omlx-scope-openchamber/blob/main/macOS/README.md) for installation, connection, and verification limits.
 
 ## Install the OpenChamber extension
 
@@ -61,6 +54,19 @@ credential. The endpoint must use `http://127.0.0.1:<port>`; an OpenCode provide
 URL ending in `/v1` is also accepted. The service never changes your configuration.
 
 See [Configuration](docs/CONFIGURATION.md) for supported files and troubleshooting.
+
+## Optional Mac app
+
+The native companion remains at **0.5.2**; **0.5.3 is an extension-only update**.
+
+The native Mac companion provides a monitoring window and menu-bar popover,
+with selectable token-speed, CPU, memory, or icon-only readouts. It uses SwiftUI
+and Apple’s resource APIs: no Electron, bundled Node runtime, or background daemon.
+
+Download **OMLX-Scope-macOS-0.5.2.zip** from Releases on an Apple Silicon Mac
+running macOS 14 or newer. Unzip and move **OMLX Scope.app** to Applications.
+The native app is currently an **ad-hoc-signed preview, not notarized**. See
+[Mac app setup](https://github.com/mikebuckets171/omlx-scope-openchamber/blob/main/macOS/README.md) for installation, connection, and verification limits.
 
 ## Scope and privacy
 

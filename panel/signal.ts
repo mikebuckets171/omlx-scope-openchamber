@@ -10,7 +10,7 @@ export class SignalHistory {
 
   break(): void { this.identity = ''; }
 
-  observe(snapshot: TelemetrySnapshot): void {
+  observe(snapshot: TelemetrySnapshot, intervalMs = 500): void {
     this.prune(snapshot.sampledAt);
     const rate = snapshot.phase === 'decode' ? snapshot.liveDecodeTPS
       : snapshot.phase === 'prefill' ? snapshot.livePrefillTPS : null;
@@ -22,7 +22,8 @@ export class SignalHistory {
     const identity = JSON.stringify([snapshot.modelID, snapshot.phase, snapshot.traceEpoch]);
     const last = this.points.at(-1);
     if (last && snapshot.sampledAt <= last.at) return;
-    if (identity !== this.identity || !last || snapshot.sampledAt - last.at > 2_500) this.segment += 1;
+    const allowedGap = Number.isFinite(intervalMs) ? Math.max(2_500, Math.min(5_000, intervalMs + 1_000)) : 2_500;
+    if (identity !== this.identity || !last || snapshot.sampledAt - last.at > allowedGap) this.segment += 1;
     this.identity = identity;
     this.points.push({ at: snapshot.sampledAt, rate, phase: snapshot.phase, segment: this.segment });
     // At the maximum two observations/second this retains a full 90s window.

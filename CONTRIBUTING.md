@@ -37,3 +37,14 @@ allowlist, checks its entries, and compares extracted contents with the sources.
 It rejects host-only code in the browser bundle and enforces the size budget.
 Do not call a synthetic preview a live hardware test. Record any live
 OpenChamber/oMLX verification separately before declaring a release qualified.
+
+The panel uses the SDK guest bundler. The service uses stock `bun build` with
+`--target=node --format=esm --minify-whitespace`; function/variable names remain
+intact. The JSONC ESM import and extracted-Node-package smoke test must be kept.
+The 160 KiB uncompressed package budget is unchanged. Tests cover progress and
+preference races as well as the published SDK storage/clipboard message contracts.
+
+Prefill changes must cover missing counters, incomplete stages, cache reuse,
+stalled readings, and whole-token percentage boundaries. Preview failure
+responses must pass the pinned SDK parser; do not lengthen browser timeouts
+to compensate for an invalid synthetic host message.

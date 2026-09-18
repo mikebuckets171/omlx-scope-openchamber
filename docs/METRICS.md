@@ -5,7 +5,8 @@ it is reported or can be derived from complete observations.
 
 | Reading | Meaning |
 | --- | --- |
-| Token speed | The active request's reported average, not instantaneous throughput |
+| Token speed | Generation is the active request's reported average; prefill is the runtime's reported progress speed, not an ETA |
+| Prefill remaining | `(total - processed) / total × 100` for the current runtime stage; zero/missing/contradictory totals are unavailable |
 | Context | Reported prompt tokens divided by the model's reported context window; not OpenCode's compaction threshold |
 | Prefix reused | Verified cached tokens divided by reported prompt tokens |
 | Requests | Server-wide active and queued counts; unknown counts are not zero |
@@ -22,16 +23,38 @@ it is reported or can be derived from complete observations.
 Memory is displayed in **GiB**, where 1 GiB is 1,024³ bytes. Native VM page size
 is read from the command output; it is not assumed to be 4 KiB.
 
+## Prefill progress
+
+Remaining percentage uses oMLX's **processed** and **total** counters. Cached
+prefix reuse is shown separately and is not subtracted from this total again.
+The stage can change during multi-stage or speculative prefill: its progress is
+not a whole-request percentage and does not predict time to completion. Incomplete
+work below one percent remaining displays `<1%`, never a premature zero.
+
+A connected request whose counters stop advancing for 15 seconds is labelled
+**Waiting for progress**. Its last percentage remains visible but is identified
+as a held reading; live speed is withheld. Pause holds observations with a clear
+label. Disconnecting or moving into generation removes the prefill card. Missing
+counts display **Progress unavailable**, not zero. Older service responses that
+supply only a valid progress fraction remain readable without invented counts.
+
+The mapping was checked against oMLX's `omlx/prefill_progress.py` at revision
+`ca32d928ca561af4921a6724de89adee9d70c7b3`. It does not introduce an additional
+runtime request or inference operation.
+
 ## History and freshness
 
 Inference and host charts have a fixed 90-second time window. Throughput starts
 at zero; host percentages use a fixed 0–100% scale. Pauses, connection loss,
 missing values, request changes, and large sampling gaps break the trace.
-History is bounded in memory and is not written to disk.
+History is bounded in memory and is not written to disk. Energy-saving updates
+keep a cadence-aware gap threshold; ordinary three-second samples form a line
+while pauses and actual missing observations remain gaps. Compact mode keeps
+bounded observations but skips geometry updates for its hidden charts.
 
 Polling pauses when the panel is hidden or manually paused. The interface marks
-a stalled response as stale after six seconds instead of leaving a live speed
-on screen. Resuming waits for a new reading. Concurrent requests do not become
+a stalled response as stale after six seconds (ten with energy-saving updates)
+instead of leaving a live speed on screen. Resuming waits for a new reading. Concurrent requests do not become
 a fabricated single-request speed.
 
 ## Data sources and compatibility

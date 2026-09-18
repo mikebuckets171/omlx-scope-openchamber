@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.3 — 2026-09-18
+
+- Restored a prominent prefill percentage remaining, with processed/total counts.
+- Added compact view, saved energy-saving preferences, and privacy-conscious Copy stats.
+- Made stale, invalid, paused, and multi-stage prefill progress explicit.
+- Kept energy-saving throughput history connected at its actual sampling cadence.
+- Reduced the packaged service's whitespace without changing dependencies or permissions.
+
+This is an OpenChamber extension update. The native Mac companion remains at 0.5.2.
+
 ## 0.5.2 — 2026-09-17
 
 - Added an optional native Mac companion with a monitoring window and menu-bar popover.
