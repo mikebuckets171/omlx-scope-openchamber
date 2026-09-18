@@ -39,6 +39,9 @@ jobs:
           PY
           git apply --check --unidiff-zero "$RUNNER_TEMP/changes.patch"
           git apply --unidiff-zero "$RUNNER_TEMP/changes.patch"
+          # This token cannot update workflows. Apply the CI change separately
+          # through the authorized repository connector, not this token.
+          git restore --source=HEAD -- .github/workflows/ci.yml
       - name: Build and verify extension
         run: bun install --frozen-lockfile && bun run check
       - name: Check generated bundles and preserved permissions
@@ -53,14 +56,14 @@ jobs:
           for key in ['dependencies','devDependencies','openchamber','files']: assert before[key]==after[key],key
           assert after['version']=='0.5.5'
           PY
-          git diff --exit-code -- bun.lock
+          git diff --exit-code -- bun.lock .github/workflows/ci.yml
       - name: Commit source and generated bundles
         run: |
           set -euo pipefail
           git fetch origin work/experience-0.5.5
           test "$(git rev-parse FETCH_HEAD)" = "$GITHUB_SHA"
           git rm .github/workflows/workspace-055.yml .github/workflows/prepare-055.yml
-          git add .github/workflows/ci.yml .gitignore CHANGELOG.md PRIVACY.md README.md dev/preview.html docs/METRICS.md macOS package.json panel service tests/browser/preview.ts
+          git add .gitignore CHANGELOG.md PRIVACY.md README.md dev/preview.html docs/METRICS.md macOS package.json panel service tests/browser/preview.ts
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'Add performance captures, chat drafts, and adaptive prefill menu bar'
