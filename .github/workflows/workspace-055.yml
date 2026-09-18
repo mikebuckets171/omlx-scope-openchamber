@@ -1,0 +1,21 @@
+name: Source workspace
+on:
+  push:
+    branches: [work/experience-0.5.5]
+    paths: [.github/workflows/workspace-055.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: 29568bc3eb6d02780ff0c3097c98599600f4e430
+          persist-credentials: false
+      - run: git archive --format=zip --output=source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source-workspace
+          path: source.zip
+          retention-days: 1
