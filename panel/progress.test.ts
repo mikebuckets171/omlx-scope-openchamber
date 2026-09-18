@@ -43,3 +43,11 @@ test('stale progress is retained but speed is withheld; later phases remove prog
   expect(reading.livePrefillTPS).toBeNull();
   expect(prefillReading(wire({ phase: 'decode', prefillProgress: 0.64 }))).toBeNull();
 });
+
+
+test('whole-token percentages do not lose a percent to floating-point representation', () => {
+  for (let done = 0; done <= 100; done++) {
+    const reading = raw({ processed: done, total: 100 });
+    expect(prefillReading(reading)).toMatchObject({ remaining: `${100 - done}% remaining`, completed: `${done}% complete` });
+  }
+});
