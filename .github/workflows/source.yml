@@ -1,0 +1,22 @@
+name: Source archive
+on:
+  push:
+    branches: [main, work/polish-0.5.6]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - run: git archive --format=zip --output=source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source
+          path: source.zip
+          retention-days: 3
+          if-no-files-found: error
