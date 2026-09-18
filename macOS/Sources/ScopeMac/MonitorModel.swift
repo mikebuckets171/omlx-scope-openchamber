@@ -35,6 +35,7 @@ public final class MonitorModel {
     @ObservationIgnored private var started = false
     @ObservationIgnored private var failures = 0
     @ObservationIgnored private var historySegment = 0
+    @ObservationIgnored private var nextRuntimeAt: TimeInterval = 0
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
     public init(preview: Bool = false) {
@@ -66,7 +67,10 @@ public final class MonitorModel {
         case .cpu: return DisplayFormat.percent(host.cpu)
         case .memory: return DisplayFormat.percent(host.memoryPercent)
         case .speed:
-            if runtime.connected, let rate = runtime.rate { return DisplayFormat.number(rate) + " t/s" }
+            if runtime.connected, let rate = runtime.rate {
+                let value = rate >= 1000 ? rate.formatted(.number.notation(.compactName).precision(.fractionLength(1))) : DisplayFormat.number(rate)
+                return value + " t/s"
+            }
             return runtime.phase == .idle ? "Ready" : runtime.phase == .offline ? "Offline" : "—"
         }
     }
@@ -109,7 +113,7 @@ public final class MonitorModel {
     public func togglePause() { paused.toggle(); historySegment += 1; restart() }
     public func refresh() {
         guard started, !paused, !busy else { return }
-        restart()
+        nextRuntimeAt = 0; restart()
     }
     private func restart() {
         generation += 1; let current = generation
@@ -121,7 +125,7 @@ public final class MonitorModel {
                 await self.poll(current)
                 guard current == self.generation, !Task.isCancelled else { return }
                 let interval = SamplingPolicy.interval(visible: self.isVisible, active: self.runtime.hasActivity,
-                                                       lowPower: self.host.lowPower, efficient: self.efficient, failures: self.failures)
+                                                       lowPower: self.host.lowPower, efficient: self.efficient, failures: 0)
                 do { try await Task.sleep(for: .seconds(interval)) } catch { return }
             }
         }
@@ -129,21 +133,25 @@ public final class MonitorModel {
     private func poll(_ current: Int) async {
         guard !busy else { return }; busy = true
         defer { busy = false }
-        guard let origin = try? Endpoint(endpoint) else {
-            runtime = .unavailable(ConnectionError.invalidEndpoint.localizedDescription); return
-        }
-        async let response = client.snapshot(connection: Connection(endpoint: origin, apiKey: key))
+        async let response = collectRuntime()
         let machine = await sampler()
         if current == generation, !Task.isCancelled {
-            host = machine
+            host = machine; samples += 1
             cpuHistory.append(time: machine.sampledAt, value: machine.cpu, segment: historySegment)
             memoryHistory.append(time: machine.sampledAt, value: machine.memoryPercent, segment: historySegment)
         }
-        let reading = await response
-        guard current == generation, !Task.isCancelled else { return }
-        runtime = reading; samples += 1
+        let responseValue = await response
+        guard current == generation, !Task.isCancelled, let reading = responseValue else { return }
+        runtime = reading
         failures = reading.connected ? 0 : min(5, failures + 1)
+        nextRuntimeAt = reading.connected ? 0 : ProcessInfo.processInfo.systemUptime + min(30, pow(2, Double(failures)))
         speedHistory.append(time: reading.sampledAt, value: reading.rate, segment: reading.epoch &+ (historySegment &* 1_000_000))
+    }
+
+    private func collectRuntime() async -> RuntimeReading? {
+        guard ProcessInfo.processInfo.systemUptime >= nextRuntimeAt else { return nil }
+        guard let origin = try? Endpoint(endpoint) else { return .unavailable(ConnectionError.invalidEndpoint.localizedDescription) }
+        return await client.snapshot(connection: Connection(endpoint: origin, apiKey: key))
     }
 
     public func saveConnection(endpoint text: String, newKey: String) {
@@ -156,7 +164,7 @@ public final class MonitorModel {
             }
             endpoint = parsed.url.absoluteString; defaults.set(endpoint, forKey: "endpoint")
             settingsMessage = "Connection saved."
-            runtime = RuntimeReading(); speedHistory.clear(); failures = 0; restart()
+            runtime = RuntimeReading(); speedHistory.clear(); failures = 0; nextRuntimeAt = 0; restart()
         } catch { settingsMessage = error.localizedDescription }
     }
     public func useExistingConnection() {
@@ -166,14 +174,14 @@ public final class MonitorModel {
         defaults.set("opencode", forKey: "credentialPreference")
         if let savedEndpoint = saved.endpoint { endpoint = savedEndpoint; defaults.set(endpoint, forKey: "endpoint") }
         settingsMessage = "Using your saved local connection. No files were changed."
-        runtime = RuntimeReading(); speedHistory.clear(); failures = 0; restart()
+        runtime = RuntimeReading(); speedHistory.clear(); failures = 0; nextRuntimeAt = 0; restart()
     }
     public func forgetKey() {
         do {
             try Credentials.remove(); key = ""; credentialSource = "Not configured"
             defaults.set("none", forKey: "credentialPreference")
             settingsMessage = "Saved key removed from OMLX Scope. OpenCode files were not changed."
-            runtime = .unavailable(ConnectionError.credentialRequired.localizedDescription); restart()
+            runtime = .unavailable(ConnectionError.credentialRequired.localizedDescription); nextRuntimeAt = 0; restart()
         } catch { settingsMessage = error.localizedDescription }
     }
     public func copyDiagnostics() {

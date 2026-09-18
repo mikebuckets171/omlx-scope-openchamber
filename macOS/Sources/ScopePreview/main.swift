@@ -3,7 +3,7 @@ import SwiftUI
 import ScopeCore
 import ScopeMac
 
-// Developer-only native SwiftUI previews. Not part of OMLXScope.app.
+// Developer-only native previews. Not part of OMLXScope.app.
 @MainActor
 func renderPreviews() throws {
     guard CommandLine.arguments.count == 2 else { fatalError("Pass an output directory.") }
@@ -29,14 +29,35 @@ func renderPreviews() throws {
     }
     model.setPreview(runtime: runtime, host: host, rates: rates)
     func export<V: View>(_ view: V, name: String, width: CGFloat, scheme: ColorScheme) throws {
+        let appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)!
         let canvas = view.environment(\.colorScheme, scheme).preferredColorScheme(scheme)
-            .background(scheme == .dark ? Color(nsColor: .windowBackgroundColor) : Color.white)
-        let renderer = ImageRenderer(content: canvas); renderer.proposedSize = ProposedViewSize(width: width, height: nil); renderer.scale = 2
-        guard let image = renderer.cgImage else { throw NSError(domain: "ScopePreview", code: 1) }
-        let bitmap = NSBitmapImageRep(cgImage: image)
-        guard let data = bitmap.representation(using: .png, properties: [:]) else { throw NSError(domain: "ScopePreview", code: 2) }
-        try data.write(to: root.appendingPathComponent(name + ".png"))
-        print("Rendered \(name): \(image.width) × \(image.height)")
+            .background(Color(nsColor: .windowBackgroundColor))
+        // NSHostingView includes native menus that ImageRenderer cannot capture.
+        let hosting = NSHostingView(rootView: canvas)
+        hosting.appearance = appearance
+        let fitting = hosting.fittingSize
+        let size = NSSize(width: width, height: max(1, fitting.height))
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.appearance = appearance
+        window.contentView = hosting
+        hosting.frame = NSRect(origin: .zero, size: size)
+        window.setContentSize(size)
+        window.orderFrontRegardless()
+        hosting.layoutSubtreeIfNeeded()
+        window.displayIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        var png: Data?
+        appearance.performAsCurrentDrawingAppearance {
+            guard let bitmap = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) else { return }
+            hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
+            png = bitmap.representation(using: .png, properties: [:])
+        }
+        window.orderOut(nil); window.close()
+        guard let png else { throw NSError(domain: "ScopePreview", code: 1) }
+        try png.write(to: root.appendingPathComponent(name + ".png"))
+        print("Rendered \(name): \(Int(size.width)) × \(Int(size.height)) points")
     }
     for scheme in [ColorScheme.dark, .light] {
         NSApp.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
@@ -45,6 +66,7 @@ func renderPreviews() throws {
             HStack { Text("OMLX Scope").font(.title2.weight(.semibold)); Spacer(); Text("Preview data").font(.caption).foregroundStyle(.secondary) }
             OverviewContent(model: model)
         }.padding(30).frame(width: 850), name: "overview-\(theme)", width: 850, scheme: scheme)
+        try export(MonitorView(model: model).frame(width: 1050, height: 780), name: "workspace-\(theme)", width: 1050, scheme: scheme)
         try export(MenuPopover(model: model), name: "menu-\(theme)", width: 345, scheme: scheme)
         try export(ResourcesContent(model: model).padding(28).frame(width: 850), name: "resources-\(theme)", width: 850, scheme: scheme)
     }
