@@ -49,3 +49,17 @@ test('two bounded summaries compare observed generation only and redact identity
   expect(report).not.toContain('traceEpoch');expect(report).toContain('not selected-chat');
   c.clear();expect(c.current).toBeNull();expect(c.baseline).toBeNull();
 });
+
+test('large cumulative counters preserve small deltas without rounding loss', () => {
+  let now = 0; const c = new PerformanceCapture(() => now);
+  c.start(frame(0, Number.MAX_SAFE_INTEGER - 10), 30);
+  now = 1000; c.observe(frame(now, Number.MAX_SAFE_INTEGER - 9));
+  now = 2000; c.observe(frame(now, Number.MAX_SAFE_INTEGER - 8));
+  expect(c.current?.decodeTokens).toBe(2); expect(capturedRate(c.current)).toBe(1);
+});
+test('repeated cached samples cannot leave a capture running beyond its window', () => {
+  let now = 0; const c = new PerformanceCapture(() => now); c.start(frame(0), 30);
+  for (now = 1000; now <= 31_000; now += 1000) c.observe(frame(0));
+  expect(c.current?.status).toBe('interrupted'); expect(c.current?.samples).toBe(1);
+  expect(c.current?.note).toContain('No fresh'); expect(capturedRate(c.current)).toBeNull();
+});

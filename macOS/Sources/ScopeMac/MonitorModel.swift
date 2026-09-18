@@ -133,11 +133,14 @@ public final class MonitorModel {
                 guard let self, current == self.generation else { return }
                 await self.poll(current)
                 guard current == self.generation, !Task.isCancelled else { return }
-                let interval = SamplingPolicy.interval(visible: self.isVisible, active: self.runtime.hasActivity,
-                                                       lowPower: self.host.lowPower, efficient: self.efficient, failures: 0)
-                do { try await Task.sleep(for: .seconds(interval)) } catch { return }
+                do { try await Task.sleep(for: .seconds(self.samplingInterval)) } catch { return }
             }
         }
+    }
+    var samplingInterval: TimeInterval {
+        let observingRuntime = isVisible || menuReadout == .speed
+        return SamplingPolicy.interval(visible: isVisible, active: observingRuntime && runtime.hasActivity,
+                                       lowPower: host.lowPower, efficient: efficient, failures: 0)
     }
     private func poll(_ current: Int) async {
         guard !busy else { return }; busy = true

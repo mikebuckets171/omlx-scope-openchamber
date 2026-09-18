@@ -44,7 +44,10 @@ export class PerformanceCapture {
     if (!snapshot.available) { this.stop('Runtime unavailable'); return; }
     if (snapshot.modelID !== c.model || (snapshot.activeRequests ?? 0) > 1) { this.stop('Model or workload changed'); return; }
     if (snapshot.sampledAt < c.lastAt) { this.stop('Observation clock changed'); return; }
-    if (snapshot.sampledAt === c.lastAt) return;
+    if (snapshot.sampledAt === c.lastAt) {
+      if (now - this.started >= c.targetSeconds * 1000) this.stop('No fresh observations');
+      return;
+    }
     if (c.samples && snapshot.sampledAt - c.lastAt > 12_000) { this.stop('Monitoring gap'); return; }
     c.seconds = Math.max(0, (now - this.started) / 1000);
     c.lastAt = snapshot.sampledAt; c.samples = Math.min(1000, c.samples + 1);
@@ -58,7 +61,7 @@ export class PerformanceCapture {
       if (p && p.epoch === snapshot.traceEpoch && n >= p.tokens && snapshot.sampledAt > p.at) {
         const elapsed = (snapshot.sampledAt - p.at) / 1000;
         if (elapsed <= 12) {
-          const sum = c.decodeTokens + n - p.tokens;
+          const sum = c.decodeTokens + (n - p.tokens);
           if (!Number.isSafeInteger(sum)) { this.stop('Token counter exceeded safe range'); return; }
           c.decodeTokens = sum; c.decodeSeconds += elapsed;
         }

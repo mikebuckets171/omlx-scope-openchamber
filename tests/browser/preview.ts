@@ -256,6 +256,7 @@ test('recent generations capture last seen values, copy sanitized observations, 
   await expect(frame.locator('#recent-list')).toContainText('tokens last seen');
   const before = await requests(page);
   await frame.locator('#copy-recent').click();
+  await expect.poll(() => page.evaluate(() => (window as any).previewCopied)).toContain('not final');
   const copied = await page.evaluate(() => (window as any).previewCopied);
   expect(copied).toContain('not final'); expect(copied).not.toMatch(/publisher|large-context|request_id|api_key/);
   await frame.locator('#clear-recent').click();
@@ -371,6 +372,7 @@ test('performance capture observes, pins, copies, and clears without running inf
   await expect(frame.locator('#capture-speed')).toContainText('tok/s');
   await frame.locator('#capture-pin').click();await expect(frame.locator('#capture-baseline')).toBeVisible();
   await frame.locator('#capture-copy').click();
+  await expect.poll(() => page.evaluate(() => (window as any).previewCopied)).toContain('performance observations');
   const text=await page.evaluate(()=>(window as any).previewCopied);
   expect(text).toContain('performance observations');expect(text).not.toContain('Qwen');expect(text).not.toContain('synthetic-chat');
   expect(await page.evaluate(()=>(window as any).previewWrites)).toBe(0);

@@ -27,9 +27,9 @@ export class CaptureView {
       }
       this.status('Recording observations only. No prompt or model setting was changed.'); this.render();
     });
-    this.node('capture-stop').addEventListener('click', () => { this.capture.stop(); this.render(); });
-    this.node('capture-pin').addEventListener('click', () => { this.capture.pin(); this.render(); });
-    this.node('capture-clear').addEventListener('click', () => { this.capture.clear(); this.render(); });
+    this.node('capture-stop').addEventListener('click', () => { this.capture.stop(); this.status('Capture stopped. Readings are retained as a partial observation.'); this.render(); });
+    this.node('capture-pin').addEventListener('click', () => { if (this.capture.pin()) this.status('Reference pinned. Record another comparable workload to compare.'); this.render(); });
+    this.node('capture-clear').addEventListener('click', () => { this.capture.clear(); this.status('Capture and reference cleared. oMLX statistics were not changed.'); this.render(); });
     this.node('capture-copy').addEventListener('click', async () => {
       const button = this.node('capture-copy') as HTMLButtonElement; button.disabled = true;
       try { await this.copied(this.capture.report(this.version)); this.status('Capture copied. No model names or chat content included.'); }

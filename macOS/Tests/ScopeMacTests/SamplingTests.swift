@@ -21,11 +21,13 @@ final class SamplingTests: XCTestCase {
         XCTAssertEqual(model.host.cpu, 12)
     }
 
-    @MainActor func testMenuReadoutHasBoundedWidthForLargePrefillRate() {
+    @MainActor func testMenuReadoutPrioritizesPrefillAndBoundsLargeGenerationRate() {
         let model = MonitorModel(preview: true)
         var runtime = RuntimeReading(); runtime.phase = .prefill; runtime.rate = 12_400
         model.setPreview(runtime: runtime, host: HostReading(), rates: [])
         model.menuReadout = .speed
+        XCTAssertEqual(model.menuText, "Prefill") // No counters: do not invent a percentage.
+        runtime.phase = .decode; model.runtime = runtime
         XCTAssertLessThanOrEqual(model.menuText.count, 11)
         XCTAssertTrue(model.menuText.contains("t/s"))
     }
@@ -47,5 +49,18 @@ extension SamplingTests {
         model.menuReadout = .cpu; model.start(); defer { model.stop() }
         try await Task.sleep(for:.milliseconds(150))
         XCTAssertEqual(model.samples,1); XCTAssertEqual(model.runtime.phase,.connecting)
+    }
+    @MainActor func testHiddenResourceOnlyModeDoesNotInheritActiveModelCadence() {
+        let model = MonitorModel(preview: true)
+        var runtime = RuntimeReading(); runtime.phase = .prefill
+        model.setPreview(runtime: runtime, host: HostReading(), rates: [])
+        model.menuReadout = .speed
+        XCTAssertEqual(model.samplingInterval, 2)
+        model.menuReadout = .cpu
+        XCTAssertEqual(model.samplingInterval, 5)
+        let id = UUID(); model.setVisible(id, true)
+        XCTAssertEqual(model.samplingInterval, 1)
+        model.efficient = true
+        XCTAssertEqual(model.samplingInterval, 3)
     }
 }
