@@ -1,0 +1,245 @@
+name: Prepare 0.5.2 packages
+on:
+  push:
+    branches: [work/native-0.5.2]
+    paths: [.github/workflows/prepare-052.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    if: github.repository == 'mikebuckets171/omlx-scope-openchamber' && github.ref == 'refs/heads/work/native-0.5.2'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: Apply reviewed source updates
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          def replace(path, old, new):
+              p=Path(path); text=p.read_text()
+              assert text.count(old)==1, f'Unexpected source in {path}'
+              p.write_text(text.replace(old,new))
+          replace('package.json', '"version": "0.5.1"', '"version": "0.5.2"')
+          with Path('.gitignore').open('a') as f: f.write('\n# Native build output\nmacOS/.build/\nmacOS/.swiftpm/\n')
+          replace('CHANGELOG.md', '# Changelog\n', '''# Changelog
+
+          ## 0.5.2 — 2026-09-17
+
+          - Added an optional native Mac companion with a monitoring window and menu-bar popover.
+          - Added selectable menu-bar readings, energy-saving updates, and sleep-aware sampling.
+          - Added native CPU, memory, battery, and thermal-state readings using public macOS APIs.
+          - Added Keychain-backed connection settings and sanitized diagnostics.
+          - Added an energy-saving control to the OpenChamber extension.
+          - Preserved the 0.5.1 packaged-service startup fix.
+
+          The native companion is an ad-hoc-signed preview, not a notarized application.
+          ''')
+          readme=Path('README.md').read_text()
+          readme=readme.replace('[Installation](#install)', '[Installation](#install-the-openchamber-extension)')
+          readme=readme.replace('No analytics, cloud backend, external fonts, or charting framework.', 'No analytics, cloud backend, external fonts, or third-party charting framework.\nThe leaf button reduces extension refresh frequency without pausing inference.')
+          readme=readme.replace('## Install\n', '''## Mac app
+
+          The native Mac companion provides a monitoring window and menu-bar popover,
+          with selectable token-speed, CPU, memory, or icon-only readouts. It uses SwiftUI
+          and Apple’s resource APIs: no Electron, bundled Node runtime, or background daemon.
+
+          Download **OMLX-Scope-macOS-0.5.2.zip** from Releases on an Apple Silicon Mac
+          running macOS 14 or newer. Unzip and move **OMLX Scope.app** to Applications.
+          The native app is currently an **ad-hoc-signed preview, not notarized**. See
+          [Mac app setup](https://github.com/mikebuckets171/omlx-scope-openchamber/blob/main/macOS/README.md) for installation, connection, and verification limits.
+
+          ## Install the OpenChamber extension
+          ''')
+          readme=readme.replace("uses OpenChamber's documented extension surfaces; it does not add a macOS\nmenu-bar item or modify the host application.", "uses OpenChamber's documented extension surfaces. The optional native app owns\nits own menu-bar item; neither component modifies OpenChamber or oMLX.")
+          Path('README.md').write_text(readme)
+          with Path('PRIVACY.md').open('a') as f: f.write('''
+
+          ## Optional native Mac app
+
+          The Mac app is a separate local client. It reads CPU and memory counters through
+          public Mach/sysctl APIs, thermal and Low Power Mode from ProcessInfo, and battery
+          information from IOPowerSources. It does not use private GPU or sensor APIs.
+          Saved connection discovery reads only oMLX settings and the OpenCode oMLX API
+          credential. New keys are stored in macOS Keychain; non-secret preferences use
+          UserDefaults. Prompts, completions, and request IDs never enter display models.
+          History is bounded and held in memory. Copied diagnostics contain version and
+          connection state, not credentials, endpoint URLs, model names, or request data.
+          There is no telemetry, cloud backend, background daemon, or automatic updater.
+          The native app does not connect to the extension service or change OpenChamber.
+          ''')
+          Path('macOS/README.md').write_text('''# OMLX Scope for Mac
+
+          A native monitoring window and menu-bar companion for oMLX. Built with SwiftUI,
+          Foundation, and public macOS resource APIs. No third-party Swift packages,
+          embedded web app, bundled Node runtime, helper daemon, or login item.
+
+          ## Install
+
+          Requires an **Apple Silicon Mac with macOS 14 or newer**. Download
+          `OMLX-Scope-macOS-0.5.2.zip` from Releases, unzip it, and move
+          **OMLX Scope.app** to Applications. Closing the monitor leaves the menu-bar item
+          running; choose **Quit OMLX Scope** from its menu to quit the application.
+
+          This native companion is an **ad-hoc-signed preview**. It is not Developer ID
+          signed or notarized, and macOS may block first launch. Use Apple’s normal
+          Privacy & Security review process only after reviewing and trusting the source,
+          or build locally. Do not disable Gatekeeper. The extension has its own ZIP
+          and does not install the native app automatically.
+
+          ## Connection
+
+          Open Settings from the toolbar or popover. Only numeric loopback endpoints such
+          as `http://127.0.0.1:8000` are accepted. A trailing `/v1` is normalized to the
+          server origin. Health must identify as oMLX before login.
+
+          New keys are stored in Keychain. Leave the key field blank to keep the current
+          key. **Use Saved Connection** reads the port from `~/.omlx/settings.json` and
+          the oMLX API credential from `~/.local/share/opencode/auth.json`; neither file
+          is changed. The native app does not merge OpenCode JSONC/project configuration
+          or custom XDG paths. Use an explicit endpoint and key for those setups.
+
+          ## Menu bar and energy use
+
+          Choose token speed, CPU, memory occupancy, or icon only. Token speed is the
+          current request’s reported average, not an instantaneous estimate. Concurrent
+          requests are not combined into a misleading per-request speed.
+
+          All native views share one sampler. Active visible views update at most once
+          per second; idle views use three seconds. Background readouts use five seconds,
+          or ten with energy saving / Low Power Mode. Visible energy-saving updates use
+          three seconds. Connection failures back off to at most one attempt every 30
+          seconds. Session totals refresh at most once every ten seconds; power-source
+          metadata is cached for 30 seconds. Icon-only mode stops hidden sampling.
+          Sleep, display sleep, and manual pause stop updates. Already pending requests
+          may take a bounded time to cancel. History is limited to 90 seconds and 180
+          points per trace. There is no decorative continuous animation.
+
+          The native app and extension are independent clients. Running both can produce
+          two sets of requests. There is no undocumented inter-app bridge or shared
+          credential endpoint; each application shares only its own collection work.
+
+          ## Readings
+
+          CPU uses differences in public Mach counters. Non-free RAM is physical memory
+          minus free pages, including reclaimable pages; it is not Activity Monitor’s
+          Memory Used or memory pressure. Compression is physical compressor storage.
+          Allocated swap does not show swap traffic. Thermal state is a system-reported
+          category, not a temperature. No private GPU, fan, temperature, or bandwidth
+          sensors are queried. Missing values remain unavailable.
+
+          The oMLX client reads health, login, activity, and session-statistics endpoints.
+          Dashboard endpoint shapes remain version-dependent. It does not send prompts,
+          control inference, change models, or edit runtime configuration. Redirects are
+          rejected; response bytes and timeouts are bounded.
+
+          ## Build and verify
+
+          ```sh
+          swift test --package-path macOS
+          bash scripts/package-macos.sh
+          ./script/build_and_run.sh --verify
+          ```
+
+          Packaging produces `dist/OMLX Scope.app` and a versioned ZIP. It verifies bundle
+          structure, local code signature, and system-library linkage. The executable has
+          an 8 MB budget; the separate extension keeps its 160 KiB uncompressed budget.
+
+          CI tests native models, host APIs, and bounded loopback transport, renders native
+          SwiftUI fixtures, and launches the app. Previews use synthetic data. Live oMLX
+          sessions, Keychain prompts, VoiceOver, menu interaction, battery impact, and
+          inference-throughput impact need additional end-user Mac validation. Idle CI
+          process observations are not an energy-efficiency guarantee.
+
+          ## Platform references
+
+          - [MenuBarExtra](https://developer.apple.com/documentation/swiftui/menubarextra)
+          - [Host statistics](https://developer.apple.com/documentation/kernel/1502546-host_statistics)
+          - [Thermal state](https://developer.apple.com/documentation/foundation/processinfo/thermalstate-swift.property)
+          - [Power sources](https://developer.apple.com/documentation/iokit/iopowersources_h)
+          - [OpenChamber SDK](https://docs.openchamber.dev/sdk/)
+          ''')
+          replace('macOS/Sources/ScopePreview/main.swift', '    model.setPreview(runtime: runtime, host: host, rates: (0..<90).map { i in 23.6 + sin(Double(i) / 8) + cos(Double(i) / 3) * 0.4 })', '''    let rates: [Double?] = (0..<90).map { i in
+                  let wave = sin(Double(i) / 8.0)
+                  let ripple = cos(Double(i) / 3.0) * 0.4
+                  return 23.6 + wave + ripple
+              }
+              model.setPreview(runtime: runtime, host: host, rates: rates)''')
+          p=Path('macOS/Sources/ScopeCore/Normalizer.swift'); s=p.read_text()
+          s=s.replace('func string(', 'func identifier(').replace('string(', 'identifier(')
+          s=s.replace('return trimmed.isEmpty ? nil : String(trimmed.prefix(300))', 'return trimmed.isEmpty ? nil : trimmed')
+          s=s.replace('result.model = identifier(model["id"])', 'result.model = identifier(model["id"]).map { String($0.prefix(300)) }')
+          s=s.replace('result.ssdCacheBytes = nonnegative(object(cache["cold_tier"])["physical_bytes"])', '''result.ssdCacheBytes = nonnegative(object(cache["cold_tier"])["physical_bytes"])
+                  if result.ssdCacheBytes == nil, let physical = nonnegative(cache["total_size_bytes"]) {
+                      let sidecars = objects(cache["models"]).reduce(0.0) { $0 + (nonnegative(object($1["gdn_staging"])["sidecar_size_bytes"]) ?? 0) }
+                      let total = physical + sidecars
+                      result.ssdCacheBytes = total.isFinite ? total : nil
+                  }''')
+          p.write_text(s)
+          replace('macOS/Sources/ScopeMac/Credentials.swift', '''guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= 1_000_000,
+                            let data = try? Data(contentsOf: url), data.count <= 1_000_000,''', '''guard let handle = try? FileHandle(forReadingFrom: url) else { return [:] }
+                      defer { try? handle.close() }
+                      guard let data = try? handle.read(upToCount: 1_000_001), data.count <= 1_000_000,''')
+          p=Path('macOS/Sources/ScopeMac/MonitorModel.swift'); s=p.read_text()
+          s=s.replace('@ObservationIgnored private var failures = 0', '@ObservationIgnored private var failures = 0\n    @ObservationIgnored private var historySegment = 0')
+          s=s.replace('if screen { self.screenAsleep', 'self.historySegment += 1\n                    if screen { self.screenAsleep')
+          s=s.replace('public func togglePause() { paused.toggle(); restart() }', 'public func togglePause() { paused.toggle(); historySegment += 1; restart() }')
+          s=s.replace('value: machine.cpu)', 'value: machine.cpu, segment: historySegment)').replace('value: machine.memoryPercent)', 'value: machine.memoryPercent, segment: historySegment)')
+          s=s.replace('segment: reading.epoch)', 'segment: reading.epoch &+ (historySegment &* 1_000_000))')
+          p.write_text(s)
+          replace('panel/main.ts', '<div class="monitor-controls"><button id="pause"', '<div class="monitor-controls"><button id="efficiency" type="button" aria-label="Energy-saving updates" aria-pressed="false" title="Energy-saving updates: reduce monitoring refresh frequency"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 3c-8-1-13 3-10 9s10 1 10-9ZM4 16l8-8"/></svg></button><button id="pause"')
+          replace('panel/main.ts', 'let userPaused = false;', 'let userPaused = false;\nlet efficient = false;')
+          replace('panel/main.ts', '  return latest.system ? Math.min(2_000, nextDelay(last, failures)) : nextDelay(last, failures);', '  const delay = latest.system ? Math.min(2_000, nextDelay(last, failures)) : nextDelay(last, failures);\n  return efficient ? Math.max(3_000, delay) : delay;')
+          replace('panel/main.ts', 'No fresh observations for 6 seconds. Retained readings are not live.', 'No fresh observations. Retained readings are not live.')
+          replace('panel/main.ts', '  }, 6_000);', '  }, efficient ? 10_000 : 6_000);')
+          replace('panel/main.ts', "button.addEventListener('click', () => {", '''document.getElementById('efficiency')!.addEventListener('click', (event) => {
+            efficient = !efficient;
+            (event.currentTarget as HTMLButtonElement).setAttribute('aria-pressed', String(efficient));
+            shell.dataset.efficient = String(efficient);
+            armFreshness();
+          });
+
+          button.addEventListener('click', () => {''')
+          with Path('panel/style.css').open('a') as f: f.write('''
+
+          /* Quiet, keyboard-accessible monitoring controls; no animation loops. */
+          #efficiency { display:grid; place-items:center; width:30px; height:32px; padding:0; border:1px solid var(--scope-line); border-radius:9px; background:transparent; color:var(--oc-muted); cursor:pointer; }
+          #efficiency svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.4; stroke-linecap:round; stroke-linejoin:round; }
+          #efficiency:hover, #efficiency[aria-pressed="true"] { color:var(--scope-accent); background:var(--scope-surface); }
+          .scope[data-surface="page"] .instrument { min-width:0; }
+          @media (min-width:900px) { .scope[data-surface="page"] #model { font-size:25px; line-height:1.4; } .scope[data-surface="page"] .activity { font-size:12px; line-height:1.65; } }
+          ''')
+          with Path('tests/browser/preview.ts').open('a') as f: f.write('''
+
+          test('energy-saving control reduces repeated polling without pausing the model', async ({ page }) => {
+            const frame = await openPanel(page);
+            await frame.locator('#efficiency').click();
+            await expect(frame.locator('#efficiency')).toHaveAttribute('aria-pressed', 'true');
+            await page.waitForTimeout(1_000);
+            const before = await requests(page);
+            await page.waitForTimeout(1_500);
+            expect(await requests(page)).toBe(before);
+            await expect(frame.locator('#pause')).toHaveAttribute('aria-pressed', 'false');
+            await frame.locator('#refresh').click();
+            await expect.poll(() => requests(page)).toBeGreaterThan(before);
+            await expect(frame.locator('#connection')).toHaveText('oMLX connected');
+          });
+          ''')
+          PY
+      - name: Build and verify installable extension
+        run: bun install --frozen-lockfile && bun run check
+      - name: Commit reviewed source and generated bundle
+        run: |
+          set -euo pipefail
+          git fetch origin work/native-0.5.2
+          test "$(git rev-parse FETCH_HEAD)" = "$GITHUB_SHA"
+          git diff --exit-code -- bun.lock service/main.ts service/config.ts service/main.js
+          git add .gitignore CHANGELOG.md README.md PRIVACY.md package.json panel/main.ts panel/main.js panel/style.css tests/browser/preview.ts macOS/README.md macOS/Sources/ScopePreview/main.swift macOS/Sources/ScopeCore/Normalizer.swift macOS/Sources/ScopeMac/Credentials.swift macOS/Sources/ScopeMac/MonitorModel.swift
+          git rm .github/workflows/prepare-052.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Prepare 0.5.2 native companion and energy-saving controls'
+          git push origin HEAD:work/native-0.5.2
