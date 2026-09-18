@@ -48,3 +48,40 @@ jobs:
           path: test-results/
           retention-days: 7
           if-no-files-found: warn
+
+
+  native:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Test native models, transport and host APIs
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/native-evidence"
+          swift test --package-path macOS 2>&1 | tee "$RUNNER_TEMP/native-evidence/tests.log"
+      - name: Build and validate native app
+        run: bash scripts/package-macos.sh
+      - name: Render native SwiftUI fixtures
+        run: swift run --package-path macOS ScopePreview "$RUNNER_TEMP/native-evidence"
+      - name: Launch app and sample idle process
+        run: |
+          /usr/bin/open -n "$PWD/dist/OMLX Scope.app"
+          sleep 5
+          PID="$(pgrep -x OMLXScope | head -1)"
+          test -n "$PID"
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          echo 'CI idle sample; RSS includes shared pages. Not an inference or battery benchmark.' > "$RUNNER_TEMP/native-evidence/idle-process.txt"
+          for N in 1 2 3 4 5; do
+            ps -p "$PID" -o pid=,pcpu=,rss=,etime= >> "$RUNNER_TEMP/native-evidence/idle-process.txt"
+            sleep 3
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-macos
+          path: |
+            dist/OMLX-Scope-macOS-*.zip
+            ${{ runner.temp }}/native-evidence/
+          retention-days: 7
+          if-no-files-found: error
