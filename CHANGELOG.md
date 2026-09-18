@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.5 — 2026-09-18
+
+- Added host-provided OpenChamber context and a stats-to-draft action that never sends automatically.
+- Added 30/60-second performance captures, a pinned comparison, and measurement-only exports.
+- Added model-context headroom, explicitly separate from OpenCode compaction and output limits.
+- Prioritized prefill progress in the extension's visual hierarchy.
+- Updated the Mac menu bar to show prefill percentage before generation speed, with a remaining/completed preference.
+- Added detailed native prefill progress and stage estimates to the popover and monitoring window.
+- Reduced hidden CPU/memory-only monitoring work and added independent deadlines to native resource commands.
+
+
 ## 0.5.4 — 2026-09-18
 
 - Added a runtime-reported prefill stage time estimate beside percentage remaining.

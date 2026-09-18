@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { readCommand } from './native-command.ts';
 import type { MacMemory } from '../src/system.ts';
 
 export const MAC_SAMPLE_INTERVAL_MS = 10_000;
@@ -11,16 +11,7 @@ const COMMANDS = [
 ] as const;
 export type NativeRead = (file: string, args: readonly string[]) => Promise<string | null>;
 
-export const readNative: NativeRead = (file, args) => new Promise((resolve) => {
-  execFile(file, [...args], {
-    encoding: 'utf8', timeout: MAC_COMMAND_TIMEOUT_MS, maxBuffer: MAC_COMMAND_MAX_BYTES,
-    killSignal: 'SIGKILL', windowsHide: true,
-    // Numeric command output must not follow a user's locale.
-    env: { LANG: 'C', LC_ALL: 'C' },
-  }, (error, stdout) => {
-    resolve(error ? null : stdout);
-  });
-});
+export const readNative: NativeRead = (file, args) => readCommand(file, args, MAC_COMMAND_TIMEOUT_MS, MAC_COMMAND_MAX_BYTES);
 
 const bytesToGB = (value: number): number | null => Number.isFinite(value) && value >= 0 && value <= Number.MAX_SAFE_INTEGER ? value / 1e9 : null;
 

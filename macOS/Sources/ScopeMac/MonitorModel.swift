@@ -6,6 +6,7 @@ import ScopeCore
 public enum MenuReadout: String, CaseIterable, Identifiable {
     case speed = "Token speed", memory = "Memory", cpu = "CPU", icon = "Icon only"
     public var id: String { rawValue }
+    public var title: String { self == .speed ? "Activity · prefill + speed" : rawValue }
 }
 
 @MainActor @Observable
@@ -19,6 +20,8 @@ public final class MonitorModel {
     public private(set) var busy = false
     public var efficient = false { didSet { defaults.set(efficient, forKey: "efficient"); restart() } }
     public var menuReadout: MenuReadout = .speed { didSet { defaults.set(menuReadout.rawValue, forKey: "menuReadout"); restart() } }
+    public var progressDisplay: ProgressDisplay = .remaining { didSet { defaults.set(progressDisplay.rawValue, forKey: "progressDisplay") } }
+    public var prefill: PrefillReading? { PrefillReading(runtime) }
     public private(set) var endpoint = "http://127.0.0.1:8000"
     public private(set) var credentialSource = "Not configured"
     public private(set) var settingsMessage: String?
@@ -47,6 +50,7 @@ public final class MonitorModel {
             let saved = SavedConnection.discover()
             endpoint = defaults.string(forKey: "endpoint") ?? saved.endpoint ?? endpoint
             efficient = defaults.bool(forKey: "efficient")
+            progressDisplay = ProgressDisplay(rawValue: defaults.string(forKey: "progressDisplay") ?? "") ?? .remaining
             menuReadout = MenuReadout(rawValue: defaults.string(forKey: "menuReadout") ?? "") ?? .speed
             let preference = defaults.string(forKey: "credentialPreference")
             if preference != "none" {
@@ -67,6 +71,8 @@ public final class MonitorModel {
         case .cpu: return DisplayFormat.percent(host.cpu)
         case .memory: return DisplayFormat.percent(host.memoryPercent)
         case .speed:
+            if let prefill { return prefill.menuText(progressDisplay) }
+            if runtime.phase == .prefill { return "Prefill" }
             if runtime.connected, let rate = runtime.rate {
                 let value = rate >= 1000 ? rate.formatted(.number.notation(.compactName).precision(.fractionLength(1))) : DisplayFormat.number(rate)
                 return value + " t/s"
@@ -108,7 +114,10 @@ public final class MonitorModel {
     public func setVisible(_ id: UUID, _ value: Bool) {
         let wasVisible = isVisible
         if value { visibleViews.insert(id) } else { visibleViews.remove(id) }
-        if wasVisible != isVisible { restart() }
+        if wasVisible != isVisible {
+            if isVisible { nextRuntimeAt = 0 }
+            restart()
+        }
     }
     public func togglePause() { paused.toggle(); historySegment += 1; restart() }
     public func refresh() {
@@ -124,11 +133,14 @@ public final class MonitorModel {
                 guard let self, current == self.generation else { return }
                 await self.poll(current)
                 guard current == self.generation, !Task.isCancelled else { return }
-                let interval = SamplingPolicy.interval(visible: self.isVisible, active: self.runtime.hasActivity,
-                                                       lowPower: self.host.lowPower, efficient: self.efficient, failures: 0)
-                do { try await Task.sleep(for: .seconds(interval)) } catch { return }
+                do { try await Task.sleep(for: .seconds(self.samplingInterval)) } catch { return }
             }
         }
+    }
+    var samplingInterval: TimeInterval {
+        let observingRuntime = isVisible || menuReadout == .speed
+        return SamplingPolicy.interval(visible: isVisible, active: observingRuntime && runtime.hasActivity,
+                                       lowPower: host.lowPower, efficient: efficient, failures: 0)
     }
     private func poll(_ current: Int) async {
         guard !busy else { return }; busy = true
@@ -149,6 +161,8 @@ public final class MonitorModel {
     }
 
     private func collectRuntime() async -> RuntimeReading? {
+        // A CPU/memory-only menu does not need runtime requests while all views are hidden.
+        guard isVisible || menuReadout == .speed else { return nil }
         guard ProcessInfo.processInfo.systemUptime >= nextRuntimeAt else { return nil }
         guard let origin = try? Endpoint(endpoint) else { return .unavailable(ConnectionError.invalidEndpoint.localizedDescription) }
         return await client.snapshot(connection: Connection(endpoint: origin, apiKey: key))
@@ -185,7 +199,7 @@ public final class MonitorModel {
         } catch { settingsMessage = error.localizedDescription }
     }
     public func copyDiagnostics() {
-        let text = "OMLX Scope 0.5.2\n\(ProcessInfo.processInfo.operatingSystemVersionString)\nRuntime: \(runtime.phase.title)\nCredential source: \(credentialSource)\nHost samples: \(samples)\nPaused: \(paused)\nEnergy saving: \(efficient)\n"
+        let text = "OMLX Scope \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "development")\n\(ProcessInfo.processInfo.operatingSystemVersionString)\nRuntime: \(runtime.phase.title)\nCredential source: \(credentialSource)\nHost samples: \(samples)\nPaused: \(paused)\nEnergy saving: \(efficient)\n"
         NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string)
     }
     /// Preview fixtures are injected by a separate developer executable, never at app startup.

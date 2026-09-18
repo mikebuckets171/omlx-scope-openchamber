@@ -112,3 +112,36 @@ The extension makes no additional oMLX requests for these views. They share exis
 polls, and no background timer, database, watcher, or library was added. The reviewed
 uncompressed installation allowance is 224 KiB; it is a packaging guardrail, not a
 claim about process memory or battery consumption.
+
+
+## Performance capture
+
+Record window observes 30 or 60 seconds using the existing poller. It starts only
+when a single-model request is observed. It does not send prompts or change model
+settings. The window ends on the first sample at/after the requested duration;
+actual observations can therefore extend by one polling interval. It can also be
+stopped manually. Pause, hidden views, loss of runtime availability, a model change,
+concurrent requests, clock reversal, or a gap over 12 seconds produce a labelled
+partial capture rather than silently claiming complete coverage.
+
+Observed generation rate is summed token increments divided by the summed duration
+of valid generation intervals. Only adjacent samples with the same model and
+service-local request epoch contribute; counter resets are not bridged. At least
+two seconds are required to display a rate. Reported request averages are not mixed
+into this calculation. Peak CPU/footprint are sampled whole-host/process maxima,
+not GPU memory, exclusive request usage, or guaranteed lifetime peaks.
+
+A pinned reference remains in memory alongside the current summary. A percentage
+comparison requires the same model and at least five seconds of observed generation
+in each window. It is descriptive, not a controlled benchmark: different prompts,
+cache states, and competing workloads can change results. Two summaries and one
+counter are retained; there is no sample database or new polling loop.
+
+## Model-context headroom
+
+Headroom is the reported model context minus reported prompt and output tokens.
+During prefill, output is zero for this calculation. Prefix-reused input is still
+part of the prompt and is not subtracted. Missing or contradictory counts suppress
+the readout. This is not OpenCode's configured input/output budget, compaction
+threshold, remaining reasoning allowance, or a guarantee against an allocation
+failure. The selected OpenChamber chat is metadata, not request attribution.

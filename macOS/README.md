@@ -7,7 +7,7 @@ embedded web app, bundled Node runtime, helper daemon, or login item.
 ## Install
 
 Requires an **Apple Silicon Mac with macOS 14 or newer**. Download
-`OMLX-Scope-macOS-0.5.2.zip` from Releases, unzip it, and move
+`OMLX-Scope-macOS-0.5.5.zip` from Releases, unzip it, and move
 **OMLX Scope.app** to Applications. Closing the monitor leaves the menu-bar item
 running; choose **Quit OMLX Scope** from its menu to quit the application.
 
@@ -31,13 +31,20 @@ or custom XDG paths. Use an explicit endpoint and key for those setups.
 
 ## Menu bar and energy use
 
-Choose token speed, CPU, memory occupancy, or icon only. Token speed is the
+Choose **Activity**, CPU, memory occupancy, or icon only. Activity automatically
+shows prefill percentage (for example **36% left**) while reading context, then
+switches to token speed while generating. Select remaining/completed percentages
+in Settings. An asterisk on a prefill value marks held progress. Unknown progress
+shows “Prefill”, never a made-up percentage. The popover and window also show
+processed/total counts and the runtime's stage estimate when fresh. Token speed is the
 current request’s reported average, not an instantaneous estimate. Concurrent
 requests are not combined into a misleading per-request speed.
 
 All native views share one sampler. Active visible views update at most once
-per second; idle views use three seconds. Background readouts use five seconds,
-or ten with energy saving / Low Power Mode. Visible energy-saving updates use
+per second; idle views use three seconds. An active background Activity readout uses two seconds so prefill is useful in the
+menu bar; idle readouts use five seconds, or ten with energy saving / Low Power Mode.
+Hidden CPU/memory-only readouts skip oMLX collection entirely, keeping only host
+resource sampling. Opening a view requests fresh runtime observations. Visible energy-saving updates use
 three seconds. Connection failures back off to at most one attempt every 30
 seconds. Session totals refresh at most once every ten seconds; power-source
 metadata is cached for 30 seconds. Icon-only mode stops hidden sampling.
@@ -73,7 +80,7 @@ bash scripts/package-macos.sh
 
 Packaging produces `dist/OMLX Scope.app` and a versioned ZIP. It verifies bundle
 structure, local code signature, and system-library linkage. The executable has
-an 8 MB budget; the separate extension keeps its 160 KiB uncompressed budget.
+an 8 MB budget; the separate extension keeps its 224 KiB uncompressed budget.
 
 CI tests native models, host APIs, and bounded loopback transport, renders native
 SwiftUI fixtures, and launches the app. Previews use synthetic data. Live oMLX

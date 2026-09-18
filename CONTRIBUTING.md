@@ -56,3 +56,14 @@ ambiguous single-request headlines. Recent-history tests must distinguish a
 request leaving observation from successful completion. Capture the complete
 iframe content when reviewing long panels; clipped screenshots are not layout
 verification.
+
+Performance captures must remain bounded observations of existing snapshots,
+not inference generators or controlled benchmarks. Cover partial windows,
+counter resets, cached samples, safe integer boundaries, and reference scoping.
+Draft actions must append only on explicit user input and never send a message.
+Await asynchronous SDK acknowledgements before asserting clipboard results.
+
+Native menu-bar tests must distinguish prefill progress from generation speed,
+preserve remaining/completed preferences, and avoid turning missing counters
+into zero remaining. Hidden CPU/memory modes must neither poll the runtime nor
+inherit an active model's faster sampling cadence.

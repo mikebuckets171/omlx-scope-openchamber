@@ -11,31 +11,24 @@ and CPU load without leaving your workspace.
 
 ## Features
 
-- **Prefill clarity:** percentage remaining, exact processed/total counts, and
-  oMLX's estimated time left for the current stage when reported.
-- **Recent generation speed:** a short observation-window rate alongside the
-  runtime's request average, so changes do not disappear into a long average.
-- **Recent generations:** up to eight last-seen observations with token counts,
-  reported average speed, and peak observed process footprint. Memory-only;
-  not a log of confirmed completions.
-- **Cache and model visibility:** reused versus unreused input, RAM/SSD cache
-  sizes, and a bounded roster showing simultaneous model activity.
+- **Inside your workflow:** host-provided OpenChamber chat state and a one-click
+  stats report appended to the chat draft. Nothing is sent automatically.
+- **Prefill at a glance:** percentage remaining, processed/total tokens, and
+  oMLX's current-stage estimate. Missing or held progress is never guessed.
+- **Performance captures:** record 30 or 60 seconds of existing observations,
+  pin a reference, and compare observed generation speed and peak footprint.
+  No test prompts, persistent logs, or extra requests.
+- **Inference insights:** request averages, recent generation speed, model-context
+  headroom, cache reuse, loaded models, and bounded recent observations.
+- **Mac resources:** CPU, non-free RAM, wired/compressed memory, and swap—even
+  when oMLX is unavailable. Optional native app with a phase-aware menu bar.
+- **Fits your workspace:** detailed and compact layouts, host light/dark themes,
+  saved energy-saving preferences, and sanitized stats/capture copying.
 
-- **Prefill remaining:** a visible percentage and processed/total token counts for
-  the current runtime stage. Missing and stale progress are labelled, never guessed.
-- **Chat-friendly controls:** a compact view, saved energy-saving preference, and
-  a Copy stats action that excludes credentials, chat text, model names, and paths.
-- **Inference activity:** request phase, reported token speed, context usage,
-  prefix reuse, and a 90-second history.
-- **Mac resources:** CPU load, memory occupancy, wired and compressed memory,
-  and swap usage. Host readings remain available when oMLX is offline.
-- **Two views:** a compact sidebar panel and a full-page workspace, with
-  OpenChamber's light and dark themes.
-- **Clear states:** missing values stay unavailable; paused and older readings
-  are identified. Pause affects the monitor, never your model.
-
-No analytics, cloud backend, external fonts, or third-party charting framework.
-The leaf button reduces extension refresh frequency without pausing inference.
+Read-only runtime monitoring. No analytics, cloud backend, external fonts,
+third-party chart library, or automatic inference. Context headroom is the model's
+reported limit, not OpenCode's compaction threshold. Captures are observations,
+not controlled benchmarks or proof that a setting caused a speed change.
 
 ## Install the OpenChamber extension
 
@@ -67,13 +60,15 @@ See [Configuration](docs/CONFIGURATION.md) for supported files and troubleshooti
 
 ## Optional Mac app
 
-The native companion remains at **0.5.2**; **0.5.4 is an extension-only update**.
+Version **0.5.5** updates both the OpenChamber extension and the optional Mac app.
 
 The native Mac companion provides a monitoring window and menu-bar popover,
-with selectable token-speed, CPU, memory, or icon-only readouts. It uses SwiftUI
+with an **Activity** readout that shows **36% left** during prefill and token speed
+while generating. Remaining/completed percentage is selectable in Settings.
+CPU, memory, and icon-only modes remain available. It uses SwiftUI
 and Apple’s resource APIs: no Electron, bundled Node runtime, or background daemon.
 
-Download **OMLX-Scope-macOS-0.5.2.zip** from Releases on an Apple Silicon Mac
+Download **OMLX-Scope-macOS-0.5.5.zip** from Releases on an Apple Silicon Mac
 running macOS 14 or newer. Unzip and move **OMLX Scope.app** to Applications.
 The native app is currently an **ad-hoc-signed preview, not notarized**. See
 [Mac app setup](https://github.com/mikebuckets171/omlx-scope-openchamber/blob/main/macOS/README.md) for installation, connection, and verification limits.
@@ -81,7 +76,8 @@ The native app is currently an **ad-hoc-signed preview, not notarized**. See
 ## Scope and privacy
 
 The monitor shows **server-wide activity**, not verified activity for a particular
-chat. On remote OpenChamber installations, resource readings belong to the server
+chat. The selected chat state is provided by OpenChamber; it does not establish
+which chat caused an oMLX request. On remote OpenChamber installations, resource readings belong to the server
 computer, not the device displaying the panel.
 
 Credentials remain in the local service. Prompts, completions, and request IDs

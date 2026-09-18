@@ -40,7 +40,7 @@ public struct MonitorView: View {
                     if selection == "resources" { ResourcesContent(model: model) }
                     else { OverviewContent(model: model) }
                     HStack {
-                        Text("OMLX Scope 0.5.2"); Spacer(); Text("On-device · no analytics")
+                        Text("OMLX Scope \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "development")"); Spacer(); Text("On-device · no analytics")
                     }.font(.caption2).foregroundStyle(.tertiary)
                 }.padding(28).frame(maxWidth: 1150)
                     .frame(maxWidth: .infinity)
@@ -77,8 +77,9 @@ public struct OverviewContent: View {
                 }
                 Text(model.paused ? "Readings are held. Your model is not paused." : model.runtime.message)
                     .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                if let progress = model.runtime.progress, model.runtime.phase == .prefill {
-                    ProgressView(value: progress).accessibilityLabel("Context read \(Int(progress * 100)) percent")
+                if let progress = model.prefill { PrefillCard(reading: progress, paused: model.paused) }
+                else if model.runtime.phase == .prefill {
+                    Text("Prefill active · percentage not reported").font(.caption).foregroundStyle(.secondary)
                 }
                 HistoryPlot(history: model.speedHistory, height: 104, caption: model.paused ? "Paused history" : "Request average · tok/s")
                 Divider()

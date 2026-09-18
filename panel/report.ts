@@ -1,5 +1,6 @@
 import type { TelemetrySnapshot } from '../src/telemetry.ts';
 import type { SystemSnapshot } from '../src/system.ts';
+import { contextBudget } from './context.ts';
 import { prefillReading } from './progress.ts';
 
 /** Copy only an allowlist of measurements. No raw messages, names, paths, keys or IDs. */
@@ -10,6 +11,8 @@ export const measurementReport = (snapshot: TelemetrySnapshot, system: SystemSna
     `Sample age: ${scalar(Math.max(0, (now - snapshot.sampledAt) / 1000), ' seconds')}`];
   if (!snapshot.available) lines.push(`Connection: ${snapshot.reason}`);
   if (snapshot.available) {
+    const budget = contextBudget(snapshot);
+    if (budget) lines.push(`Model context: ${budget.used} / ${budget.limit}; ${budget.remaining} tokens to reported limit (not OpenCode compaction or output budget)`);
     const progress = prefillReading(snapshot);
     if (progress) {
       lines.push(`Prefill: ${progress.remaining}${progress.stale || paused ? ' (last reading)' : ''} — current stage only`);

@@ -87,6 +87,17 @@ func renderPreviews() async throws {
         try await export(MonitorView(model: model).frame(width: 1050, height: 780), name: "workspace-\(theme)", width: 1050, scheme: scheme)
         try await export(MenuPopover(model: model), name: "menu-\(theme)", width: 345, scheme: scheme)
         try await export(ResourcesContent(model: model).padding(28).frame(width: 850), name: "resources-\(theme)", width: 850, scheme: scheme)
+        var prefill = runtime
+        prefill.phase = .prefill; prefill.rate = 240; prefill.progress = 0.64
+        prefill.prefillProcessed = 5824; prefill.prefillTotal = 9100; prefill.prefillETA = 13.65
+        prefill.output = nil; prefill.message = "Reading context · reported prefill average"
+        model.runtime = prefill; model.menuReadout = .speed; model.progressDisplay = .remaining
+        try await export(MenuPopover(model: model), name: "menu-prefill-\(theme)", width: 345, scheme: scheme)
+        try await export(MenuBarLabel(model: model).padding(8).frame(width: 150, height: 38), name: "menubar-prefill-\(theme)", width: 150, scheme: scheme)
+        try await export(OverviewContent(model: model).padding(24).frame(width: 850), name: "overview-prefill-\(theme)", width: 850, scheme: scheme)
+        model.runtime.progressStale = true
+        try await export(MenuPopover(model: model), name: "menu-prefill-held-\(theme)", width: 345, scheme: scheme)
+        model.runtime = runtime
     }
     model.togglePause()
     try await export(MenuPopover(model: model), name: "menu-paused", width: 345, scheme: .light)

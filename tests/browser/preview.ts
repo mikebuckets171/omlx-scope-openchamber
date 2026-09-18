@@ -41,7 +41,7 @@ test('runtime states and missing readings are explicit', async ({ page }) => {
     await expect(frame.locator('main')).not.toContainText(/NaN|undefined/);
     if (state === 'notLoaded') await expect(frame.locator('#rate')).toHaveText('Standby');
     if (state === 'auth') await expect(frame.locator('#connection')).toHaveText('Authentication required');
-    if (state === 'prefill') await expect(frame.locator('[role=progressbar]')).toHaveAttribute('aria-valuenow', '64');
+    if (state === 'prefill') await expect(frame.locator('#prefill-track')).toHaveAttribute('aria-valuenow', '64');
     if (state === 'offline') {
       await expect(frame.locator('#rate')).toHaveText('—');
       await expect(frame.locator('#machine')).toBeVisible();
@@ -256,6 +256,7 @@ test('recent generations capture last seen values, copy sanitized observations, 
   await expect(frame.locator('#recent-list')).toContainText('tokens last seen');
   const before = await requests(page);
   await frame.locator('#copy-recent').click();
+  await expect.poll(() => page.evaluate(() => (window as any).previewCopied)).toContain('not final');
   const copied = await page.evaluate(() => (window as any).previewCopied);
   expect(copied).toContain('not final'); expect(copied).not.toMatch(/publisher|large-context|request_id|api_key/);
   await frame.locator('#clear-recent').click();
@@ -337,4 +338,76 @@ test('copy recent handles denied clipboard without claiming success', async ({ p
   const frame = await openPanel(page, 'clipboard=fail');
   await frame.locator('#pause').click(); await frame.locator('#copy-recent').click();
   await expect(frame.locator('#action-status')).toContainText('Could not copy observations');
+});
+
+test('OpenChamber context follows host metadata and appends a sanitized draft without sending', async ({page}) => {
+  const frame=await openPanel(page,'chat=1');
+  await expect(frame.locator('#chamber-session')).toHaveText('Local coding session');
+  await expect(frame.locator('#chamber-state')).toContainText('Chat working');
+  await frame.locator('#compose-stats').click();
+  await expect(frame.locator('#action-status')).toContainText('nothing was sent automatically');
+  const draft=await page.evaluate(()=>(window as any).previewComposed);
+  expect(draft.mode).toBe('append'); expect(draft.text).toContain('not a selected chat');
+  expect(draft.text).not.toContain('Local coding session');expect(draft.text).not.toContain('Qwen');
+  expect(await page.evaluate(()=>(window as any).previewUnexpectedSends)).toBe(0);
+  await page.evaluate(()=>(window as any).setPreviewSession(null));
+  await expect(frame.locator('#compose-stats')).toBeDisabled();
+  await expect(frame.locator('#chamber-session')).toHaveText('No chat selected');
+});
+
+test('draft failures never claim success and no selected session cannot draft',async({page})=>{
+  let frame=await openPanel(page);await expect(frame.locator('#compose-stats')).toBeDisabled();
+  frame=await openPanel(page,'chat=1&compose=fail');await frame.locator('#compose-stats').click();
+  await expect(frame.locator('#action-status')).toContainText('Could not confirm');
+  await expect(frame.locator('#compose-stats')).toBeEnabled();
+});
+
+test('performance capture observes, pins, copies, and clears without running inference',async({page})=>{
+  const frame=await openPanel(page,'chat=1');
+  await frame.locator('#capture-start').click();
+  await expect(frame.locator('#capture')).toHaveAttribute('data-recording','true');
+  await expect(frame.locator('#capture-speed')).toContainText('tok/s');
+  await frame.locator('#capture-stop').click();
+  await expect(frame.locator('#capture-state')).toHaveText('Partial capture');
+  await expect(frame.locator('#capture-speed')).toContainText('tok/s');
+  await frame.locator('#capture-pin').click();await expect(frame.locator('#capture-baseline')).toBeVisible();
+  await frame.locator('#capture-copy').click();
+  await expect.poll(() => page.evaluate(() => (window as any).previewCopied)).toContain('performance observations');
+  const text=await page.evaluate(()=>(window as any).previewCopied);
+  expect(text).toContain('performance observations');expect(text).not.toContain('Qwen');expect(text).not.toContain('synthetic-chat');
+  expect(await page.evaluate(()=>(window as any).previewWrites)).toBe(0);
+  expect(await page.evaluate(()=>(window as any).previewUnexpectedSends)).toBe(0);
+  await frame.locator('#capture-clear').click();await expect(frame.locator('#capture-results')).toBeHidden();
+});
+
+test('pause terminates a capture honestly and context headroom has the correct scope',async({page})=>{
+  const frame=await openPanel(page);
+  await expect(frame.locator('#context-headroom')).toHaveAttribute('title',/not OpenCode/);
+  await expect(frame.locator('#context-accounted')).toContainText('prompt + output');
+  await frame.locator('#capture-start').click();await frame.locator('#pause').click();
+  await expect(frame.locator('#capture-state')).toHaveText('Partial capture');
+  await expect(frame.locator('#capture-note')).toContainText('Monitoring interrupted');
+  await expect(frame.locator('#capture-start')).toBeDisabled();
+  await frame.locator('#pause').click();await expect(frame.locator('#capture-start')).toBeEnabled();
+});
+
+test('coordinated monitor layout keeps new controls legible with prefill visible',async({page},info)=>{
+  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+  page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
+  for(const theme of ['dark','light'])for(const width of [320,1160]){
+    await page.setViewportSize({width,height:1500});
+    const frame=await openPanel(page,`chat=1&theme=${theme}&multi=resident&surface=${width>900?'page':'panel'}`);
+    if(await frame.locator('#compact').getAttribute('aria-pressed')==='true')await frame.locator('#compact').click();
+    await frame.locator('#capture-start').click();await expect(frame.locator('#capture-speed')).toContainText('tok/s');await frame.locator('#capture-stop').click();
+    await frame.locator('#capture-pin').click();
+    await page.evaluate(()=>(window as any).setPreviewState('prefill'));await frame.locator('#refresh').click();
+    await expect(frame.locator('#prefill-remaining')).toHaveText('36% remaining');
+    await expect(frame.locator('#chamber-session')).toBeVisible();
+    expect(await frame.locator('main').evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
+    const height=await frame.locator('main').evaluate(el=>Math.ceil(el.getBoundingClientRect().height)+40);
+    await page.setViewportSize({width,height});
+    await frame.locator('main').screenshot({path:info.outputPath(`coordinated-${theme}-${width}.png`)});
+    if(width===320){await frame.locator('#compact').click();await expect(frame.locator('#prefill-remaining')).toBeVisible();await expect(frame.locator('#capture')).toBeHidden();await frame.locator('main').screenshot({path:info.outputPath(`coordinated-compact-${theme}.png`)});}
+  }
+  expect(errors).toEqual([]);
 });

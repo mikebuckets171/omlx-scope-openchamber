@@ -21,6 +21,10 @@ jobs:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
       - run: bun run check
+      - name: Repeat native resource command boundary check
+        if: matrix.os == 'macos-latest'
+        run: |
+          for N in 1 2 3 4 5; do bun test service/mac-memory.test.ts service/native-command.test.ts; done
       - name: Verify checked-in bundles
         run: git diff --exit-code -- panel/main.js service/main.js
       - uses: actions/upload-artifact@v4

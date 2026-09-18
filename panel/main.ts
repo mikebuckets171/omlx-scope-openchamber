@@ -10,6 +10,9 @@ import { prefillReading } from './progress.ts';
 import { Preferences, type PreferenceKey } from './preferences.ts';
 import { measurementReport } from './report.ts';
 import { InsightView } from './insights-view.ts';
+import { CaptureView, captureMarkup } from './capture-view.ts';
+import { OpenChamberView, chamberMarkup } from './openchamber-view.ts';
+import { contextBudget } from './context.ts';
 import { version } from '../package.json';
 
 const host = connectHost();
@@ -27,6 +30,7 @@ root.innerHTML = `
   <div class="view-tools" aria-label="Monitor view options"><button id="compact" type="button" aria-pressed="false">Compact view</button><span id="cadence">Adaptive updates</span><button id="copy-stats" type="button" title="Copy readings only. No keys, chat text, model IDs, session names or paths.">Copy stats</button></div>
   <p id="action-status" class="action-status" role="status" hidden></p>
   <p id="notice" class="notice" role="status" hidden></p>
+  ${chamberMarkup}
   <div class="workspace">
   <section class="instrument" aria-label="Inference activity">
     <div class="model-line"><span class="eyebrow">INFERENCE</span><span id="phase" class="phase">Connecting</span></div>
@@ -42,6 +46,7 @@ root.innerHTML = `
     </section>
     <div id="recent-speed" class="recent-speed" hidden><strong id="window-speed">—</strong><span id="window-span">Recent generation speed</span></div>
     <p id="request-output" class="request-output" hidden></p>
+    <div id="context-headroom" class="context-headroom" hidden title="Reported prompt plus output against the model context limit. This is not OpenCode's compaction threshold or reserved output budget."><span>MODEL CONTEXT</span><strong id="context-remaining">—</strong><small id="context-accounted">Not reported</small></div>
     <figure id="signal" class="signal" role="img" aria-label="No observed throughput yet">
       <div class="chart-top"><span id="chart-title">Request throughput</span><span id="ceiling">tok/s</span></div>
       <div class="plot"><svg viewBox="0 0 600 120" preserveAspectRatio="none" aria-hidden="true"><path class="grid" d="M4 4H596 M4 60H596 M4 116H596"/><g id="trace"></g><circle id="cursor" r="3" hidden/></svg><span id="chart-empty">The next request starts here.</span></div>
@@ -52,6 +57,7 @@ root.innerHTML = `
       <div><span class="metric-label">Prefix reused</span><strong id="reuse">—</strong><span id="reuse-detail" class="metric-detail">Not reported</span><div class="meter" aria-hidden="true"><i id="reuse-bar"></i></div></div>
       <div><span class="metric-label">Requests</span><strong id="requests">—</strong><span id="queue" class="metric-detail">Waiting for oMLX</span></div>
     </div>
+    ${captureMarkup}
     <section id="recent-generations" class="insight-section" aria-labelledby="recent-title">
       <div class="section-heading"><h2 id="recent-title">Recent generations</h2><span id="recent-count">0 / 8</span></div>
       <p class="insight-note">Last-seen request averages · not final results</p>
@@ -211,9 +217,14 @@ const update = (snapshot: TelemetrySnapshot): void => {
   hidden('notice', !stale);
   renderProgress(current);
   insightView.update(snapshot);
+  captureView.update(snapshot);
   const hasOutput = current !== null && ['decode', 'processing'].includes(current.phase) && current.completionTokens !== null;
   hidden('request-output', !hasOutput);
   text('request-output', hasOutput ? `${current.completionTokens!.toLocaleString()} output tokens${current.elapsedSeconds !== null ? ` · ${number.format(current.elapsedSeconds)}s elapsed` : ''}` : '');
+  const budget = contextBudget(snapshot);
+  hidden('context-headroom', budget === null);
+  text('context-remaining', budget ? `${count(budget.remaining)} tokens to model limit` : '—');
+  text('context-accounted', budget ? `${percent(budget.percent)} accounted · prompt + output` : 'Not reported');
   const contextPercent = ratio(current?.promptTokens, current?.contextWindow);
   const reusedPercent = ratio(current?.cachedTokens, current?.promptTokens);
   text('context', percent(contextPercent)); text('context-detail', current?.promptTokens == null ? 'Not reported' : `${count(current.promptTokens)} / ${count(current.contextWindow)}`);
@@ -289,7 +300,7 @@ const syncMonitoring = (): void => {
   monitorGeneration += 1;
   poller.setPaused(userPaused || document.hidden);
   if (userPaused || document.hidden) {
-    clearFreshness(); resources.break(); signal.break(); insightView.suspend();
+    clearFreshness(); resources.break(); signal.break(); insightView.suspend(); captureView.suspend();
   } else armFreshness();
 };
 pauseButton.addEventListener('click', () => {
@@ -316,6 +327,8 @@ pauseButton.addEventListener('click', () => {
 });
 
 const actionStatus = (message: string): void => { text('action-status', message); hidden('action-status', !message); };
+const captureView = new CaptureView(shell, text => host.writeClipboard(text), actionStatus, version);
+new OpenChamberView(shell, host, () => [measurementReport(latest, lastSystem, userPaused, version), captureView.report()].filter(Boolean).join('\n\n'), actionStatus);
 const applyPreference = (key: PreferenceKey, value: boolean): void => {
   if (disposed) return;
   if (key === 'efficient') {
@@ -372,5 +385,5 @@ host.onReady((ready) => {
   poller.start();
 });
 document.addEventListener('visibilitychange', syncMonitoring);
-window.addEventListener('pagehide', (event) => { poller.stop(); clearFreshness(); resources.break(); signal.break(); insightView.suspend(); monitorGeneration += 1; if (!event.persisted) { disposed = true; host.dispose(); } });
+window.addEventListener('pagehide', (event) => { poller.stop(); clearFreshness(); resources.break(); signal.break(); insightView.suspend(); captureView.suspend(); monitorGeneration += 1; if (!event.persisted) { disposed = true; host.dispose(); } });
 window.addEventListener('pageshow', (event) => { if (event.persisted && mounted) { syncMonitoring(); poller.start(); } });

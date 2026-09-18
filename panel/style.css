@@ -216,3 +216,39 @@ footer { color: var(--oc-muted); font-size: 9px; margin-top: 14px; }
 .scope[data-compact="true"] #cache-lens, .scope[data-compact="true"] #recent-generations, .scope[data-compact="true"] #resident-section { display:none; }
 .scope[data-paused="true"] .cache-input-values, .scope[data-paused="true"] .cache-tier-values, .scope[data-paused="true"] .resident-list { opacity:.55; }
 @media (min-width:900px) { #recent-generations { margin-top:28px; } .insight-section .section-heading h2 { font-size:13px; } }
+
+/* Native host context and on-demand capture: static layout, sampled updates only. */
+.chamber-context { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-top:18px; padding:14px 16px; border:1px solid var(--scope-line); border-radius:12px; background:var(--scope-surface); }
+.chamber-meta { display:flex; flex-direction:column; gap:4px; min-width:0; flex:1 1 140px; }
+.chamber-meta strong { font-size:12px; font-weight:540; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#chamber-state { font-size:10px; color:var(--oc-muted); line-height:1.6; overflow-wrap:anywhere; }
+.chamber-context button, .capture-controls button, .capture-controls select { font:11px var(--oc-font,sans-serif); padding:8px 11px; color:var(--oc-fg); background:var(--oc-bg); border:1px solid var(--scope-line); border-radius:8px; cursor:pointer; }
+.chamber-context button:hover:not(:disabled), .capture-controls button:hover:not(:disabled) { color:var(--scope-accent); border-color:var(--scope-accent); }
+.chamber-context button:disabled, .capture-controls button:disabled { opacity:.5; cursor:default; }
+.capture-card { margin-top:26px; padding:18px; border:1px solid var(--scope-line); border-radius:14px; background:var(--scope-surface); }
+.capture-card[data-recording="true"] { border-color:var(--scope-accent); }
+.capture-controls { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:14px; }
+#capture-start { background:var(--scope-accent); color:var(--oc-bg); border-color:transparent; font-weight:600; }
+#capture-start:hover:not(:disabled) { color:var(--oc-bg); filter:brightness(.95); }
+#capture-progress { margin-top:14px; height:3px; }
+.capture-metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:20px; }
+.capture-metrics span, .capture-metrics small { display:block; font-size:10px; color:var(--oc-muted); line-height:1.5; }
+.capture-metrics strong { display:block; font:19px var(--oc-mono,monospace); margin:5px 0; font-variant-numeric:tabular-nums; }
+.capture-baseline { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:8px; border-top:1px solid var(--scope-line); padding-top:12px; margin-top:12px; font-size:10px; color:var(--oc-muted); }
+.capture-baseline strong { font-size:13px; color:var(--scope-accent); }
+.scope[data-compact="true"] .capture-card { display:none; }
+.scope[data-compact="true"] .chamber-context { padding:10px 12px; }
+@media (max-width:370px) { .capture-metrics { grid-template-columns:1fr; } .chamber-context { padding:12px; } }
+.context-headroom { display:flex; align-items:baseline; flex-wrap:wrap; gap:5px 12px; margin-top:15px; padding:12px 0; border-block:1px solid var(--scope-line); }
+.context-headroom > span { font-size:9px; letter-spacing:.06em; color:var(--oc-muted); }
+.context-headroom strong { font-size:12px; font-weight:540; font-variant-numeric:tabular-nums; }
+.context-headroom small { font-size:10px; color:var(--oc-muted); }
+select:focus-visible { outline:2px solid var(--scope-accent); outline-offset:4px; }
+/* During prefill, make progress—not the rate—the visual priority. */
+.scope[data-phase="prefill"] .readout { margin-top:20px; min-height:0; }
+.scope[data-phase="prefill"] .rate { font-size:36px; letter-spacing:-1px; }
+.scope[data-phase="prefill"] #prefill-remaining { font-size:32px; font-weight:560; }
+.scope[data-phase="prefill"] .prefill-progress { border-color:color-mix(in srgb,var(--scope-accent) 28%,var(--scope-line)); }
+.scope[data-phase="prefill"] .prefill-progress .progress-track { height:6px; }
+@media (min-width:900px) { .scope[data-phase="prefill"] #prefill-remaining { font-size:42px; letter-spacing:-1.3px; } .capture-card { padding:22px; } }
+@media (max-width:370px) { .scope[data-phase="prefill"] #prefill-remaining { font-size:26px; } }

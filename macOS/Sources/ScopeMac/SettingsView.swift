@@ -1,4 +1,5 @@
 import SwiftUI
+import ScopeCore
 
 public struct SettingsView: View {
     @Bindable var model: MonitorModel
@@ -24,8 +25,13 @@ public struct SettingsView: View {
             }
             Section("Menu Bar") {
                 Picker("Readout", selection: $model.menuReadout) {
-                    ForEach(MenuReadout.allCases) { Text($0.rawValue).tag($0) }
+                    ForEach(MenuReadout.allCases) { Text($0.title).tag($0) }
                 }
+                Picker("Prefill percentage", selection: $model.progressDisplay) {
+                    ForEach(ProgressDisplay.allCases) { Text($0.rawValue).tag($0) }
+                }
+                Text("Activity shows prefill percentage while reading context, then token speed while generating. An asterisk marks held progress, not a live reading.")
+                    .font(.caption).foregroundStyle(.secondary)
                 Toggle("Energy-saving updates", isOn: $model.efficient)
                 Text("One shared sampler serves the window and menu bar. Hidden views update less often; icon-only mode stops hidden sampling. Sleep and pause stop updates. Low Power Mode automatically reduces refresh frequency.")
                     .font(.caption).foregroundStyle(.secondary)
