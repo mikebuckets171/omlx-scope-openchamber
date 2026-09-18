@@ -162,7 +162,7 @@ footer { color: var(--oc-muted); font-size: 9px; margin-top: 14px; }
 .action-status { font-size:10px; color:var(--oc-muted); line-height:1.6; margin-top:10px; }
 .prefill-progress { padding:16px; margin-top:20px; border:1px solid var(--scope-line); background:var(--scope-surface); border-radius:12px; }
 .prefill-heading { display:flex; justify-content:space-between; gap:8px; font-size:10px; color:var(--oc-muted); }
-.prefill-values { display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-top:10px; font-variant-numeric:tabular-nums; }
+.prefill-values { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:10px; margin-top:10px; font-variant-numeric:tabular-nums; }
 #prefill-remaining { font-size:24px; letter-spacing:-.7px; font-weight:550; }
 #prefill-completed { font-size:11px; white-space:nowrap; color:var(--oc-muted); }
 .prefill-progress .progress-track { height:5px; margin-top:13px; }

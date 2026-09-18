@@ -202,6 +202,25 @@ test('storage failures never block monitoring or claim persisted preferences', a
 test('energy saving does not turn the throughput chart into disconnected invisible points', async ({ page }) => {
   const frame = await openPanel(page);
   await frame.locator('#efficiency').click();
-  await expect(frame.locator('#trace')).toContainText('');
   await expect.poll(() => frame.locator('#trace path').evaluateAll(paths => paths.some(path => /L/.test(path.getAttribute('d') ?? ''))), { timeout: 9000 }).toBe(true);
+});
+
+
+test('prefill layout is legible from a narrow panel to a full page', async ({ page }, info) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+  for (const theme of ['dark', 'light']) for (const width of [320, 1160]) {
+    await page.setViewportSize({ width, height: width < 900 ? 1200 : 950 });
+    const frame = await openPanel(page, `theme=${theme}&state=prefill&surface=${width < 900 ? 'panel' : 'page'}`);
+    await expect(frame.locator('#prefill-remaining')).toHaveText('36% remaining');
+    await expect(frame.locator('#prefill-completed')).toHaveText('64% complete');
+    expect(await frame.locator('main').evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+    await page.screenshot({ path: info.outputPath(`prefill-${theme}-${width}.png`), fullPage: true });
+    await page.evaluate(() => (window as unknown as { setPreviewState: (state: string) => void }).setPreviewState('prefill-missing'));
+    await frame.locator('#refresh').click();
+    await expect(frame.locator('#prefill-remaining')).toHaveText('Progress unavailable');
+    expect(await frame.locator('main').evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  }
+  expect(errors).toEqual([]);
 });
