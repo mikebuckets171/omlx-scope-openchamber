@@ -114,3 +114,18 @@ test('full-page history renders without page or console errors', async ({ page }
   await page.screenshot({ path: info.outputPath('workspace.png'), fullPage: true });
   expect(errors).toEqual([]);
 });
+
+
+test('energy-saving control reduces repeated polling without pausing the model', async ({ page }) => {
+  const frame = await openPanel(page);
+  await frame.locator('#efficiency').click();
+  await expect(frame.locator('#efficiency')).toHaveAttribute('aria-pressed', 'true');
+  await page.waitForTimeout(1_000);
+  const before = await requests(page);
+  await page.waitForTimeout(1_500);
+  expect(await requests(page)).toBe(before);
+  await expect(frame.locator('#pause')).toHaveAttribute('aria-pressed', 'false');
+  await frame.locator('#refresh').click();
+  await expect.poll(() => requests(page)).toBeGreaterThan(before);
+  await expect(frame.locator('#connection')).toHaveText('oMLX connected');
+});

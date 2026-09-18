@@ -16,7 +16,7 @@ root.innerHTML = `
 <main class="scope" aria-labelledby="scope-title">
   <header class="masthead">
     <div class="brand"><svg class="scope-mark" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="11"/><path d="M3 14h6l3-5 4 10 3-5h6"/></svg><h1 id="scope-title">OMLX <span>Scope</span></h1></div>
-    <div class="monitor-controls"><button id="pause" type="button" aria-pressed="false" title="Pause this monitor, not inference"><svg viewBox="0 0 20 20" aria-hidden="true"><path id="pause-symbol" d="M7 5v10M13 5v10"/></svg><span id="pause-label">Pause</span></button><button id="refresh" type="button" title="Refresh local telemetry" aria-label="Refresh local telemetry"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 7a6 6 0 1 0 .1 5M16 3v4h-4"/></svg></button></div>
+    <div class="monitor-controls"><button id="efficiency" type="button" aria-label="Energy-saving updates" aria-pressed="false" title="Energy-saving updates: reduce monitoring refresh frequency"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 3c-8-1-13 3-10 9s10 1 10-9ZM4 16l8-8"/></svg></button><button id="pause" type="button" aria-pressed="false" title="Pause this monitor, not inference"><svg viewBox="0 0 20 20" aria-hidden="true"><path id="pause-symbol" d="M7 5v10M13 5v10"/></svg><span id="pause-label">Pause</span></button><button id="refresh" type="button" title="Refresh local telemetry" aria-label="Refresh local telemetry"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 7a6 6 0 1 0 .1 5M16 3v4h-4"/></svg></button></div>
   </header>
   <div class="connection"><span class="connection-dot" aria-hidden="true"></span><span id="connection" role="status">Connecting to oMLX</span><span class="local-tag">LOCAL / READ ONLY</span></div>
   <p id="notice" class="notice" role="status" hidden></p>
@@ -82,6 +82,7 @@ const resources = new ResourceHistory();
 const pauseButton = node('pause') as HTMLButtonElement;
 let lastSystem: SystemSnapshot | null = null;
 let userPaused = false;
+let efficient = false;
 let freshnessTimer: ReturnType<typeof setTimeout> | null = null;
 let latest: TelemetrySnapshot = unavailableTelemetry('runtime_unreachable');
 let last: AvailableTelemetry | null = null;
@@ -211,7 +212,8 @@ const poller = new Poller(async () => {
     if (manualRefresh) { button.disabled = userPaused; button.removeAttribute('aria-busy'); manualRefresh = false; }
   }
   // Keep host readings useful when oMLX is offline; the client has its own retry budget.
-  return latest.system ? Math.min(2_000, nextDelay(last, failures)) : nextDelay(last, failures);
+  const delay = latest.system ? Math.min(2_000, nextDelay(last, failures)) : nextDelay(last, failures);
+  return efficient ? Math.max(3_000, delay) : delay;
 });
 
 const clearFreshness = (): void => { if (freshnessTimer !== null) clearTimeout(freshnessTimer); freshnessTimer = null; };
@@ -221,8 +223,8 @@ const armFreshness = (): void => {
   // One deadline, not an animation loop. Stalled SDK requests cannot leave a live rate on screen.
   freshnessTimer = setTimeout(() => {
     freshnessTimer = null;
-    update(unavailableTelemetry('runtime_unreachable', 'No fresh observations for 6 seconds. Retained readings are not live.'));
-  }, 6_000);
+    update(unavailableTelemetry('runtime_unreachable', 'No fresh observations. Retained readings are not live.'));
+  }, efficient ? 10_000 : 6_000);
 };
 const syncMonitoring = (): void => {
   monitorGeneration += 1;
@@ -251,6 +253,13 @@ pauseButton.addEventListener('click', () => {
   text('freshness', userPaused ? 'Monitoring paused' : 'Refreshing');
   drawSignal(Date.now(), false, latest.phase);
   syncMonitoring();
+});
+
+document.getElementById('efficiency')!.addEventListener('click', (event) => {
+  efficient = !efficient;
+  (event.currentTarget as HTMLButtonElement).setAttribute('aria-pressed', String(efficient));
+  shell.dataset.efficient = String(efficient);
+  armFreshness();
 });
 
 button.addEventListener('click', () => {

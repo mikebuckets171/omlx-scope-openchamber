@@ -12,3 +12,7 @@ artifacts/
 # Local review/build tools and browser evidence are never extension assets.
 .review-tools/
 test-results/
+
+# Native build output
+macOS/.build/
+macOS/.swiftpm/

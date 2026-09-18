@@ -1,6 +1,6 @@
 {
   "name": "omlx-scope-openchamber",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "A lightweight oMLX and Mac resource monitor for OpenChamber",
   "private": true,
   "license": "MIT",
