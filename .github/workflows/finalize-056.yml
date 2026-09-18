@@ -35,6 +35,8 @@ jobs:
           subprocess.run(['git','apply','--check','--unidiff-zero',str(path)],check=True)
           subprocess.run(['git','apply','--unidiff-zero',str(path)],check=True)
           PY
+          # Workflow edits are applied separately through the authorized GitHub connection.
+          git restore --source=HEAD -- .github/workflows
       - name: Build and validate
         run: |
           bun install --frozen-lockfile
@@ -52,15 +54,14 @@ jobs:
           for key in ['dependencies','devDependencies','openchamber','files']:assert before[key]==after[key],key
           assert after['version']=='0.5.6'
           PY
-          git diff --exit-code -- bun.lock service/main.js macOS/Package.resolved
+          git diff --exit-code -- bun.lock service/main.js macOS/Package.resolved .github/workflows
       - name: Commit source and rebuilt panel
         run: |
           set -euo pipefail
           git fetch origin work/polish-0.5.6
           test "$(git rev-parse FETCH_HEAD)" = "$GITHUB_SHA"
-          git rm .github/workflows/finalize-056.yml
           git add -A
-          if git diff --cached --name-only | grep -E '(^node_modules/|^dist/|\.p12$|\.p8$|\.pem$|\.key$|__pycache__)'; then exit 1; fi
+          if git diff --cached --name-only | grep -E '(^node_modules/|^dist/|\.p12$|\.p8$|\.pem$|\.key$|__pycache__|^\.github/workflows/)'; then exit 1; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'Complete theme integration and isolate signed Mac updates'
