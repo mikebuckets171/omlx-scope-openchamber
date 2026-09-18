@@ -1,0 +1,76 @@
+name: Prepare 0.5.6
+on:
+  push:
+    branches: [work/polish-0.5.6]
+    paths: [.github/workflows/prepare-056.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    if: github.repository == 'mikebuckets171/omlx-scope-openchamber' && github.ref == 'refs/heads/work/polish-0.5.6'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: mikebuckets171/omlx-scope-openchamber
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: Apply reviewed, checksum-verified source
+        run: |
+          set -euo pipefail
+          git diff --exit-code 9378d52bdd02858dc06917dcff976dcda297e3f3 HEAD -- . ':!.github/workflows/prepare-056.yml'
+          python3 - <<'PY'
+          import base64,gzip,hashlib,json,os,subprocess
+          from pathlib import Path
+          shas=['df5635f5ebb996d920c9608f8ad98775a5474419','77091b2d3d5a6957aece4b7d482f94edce87934b','6ea685c6a8f9e74cd5185730b4c61548cbc22584','8f0a5c70549a579c48eb57478c86878a319a1d57','39a813a58164b1c70b66b4ea9135308a82320fcd','8f599947bd89b0bde13d1a4e14bbd57cc3989969','aab16be97865b2ed8034eb1403ca9a7bbec68671','4c71df32d63e23af023d898e58c4b3d2d54d9486','f36a27b621d9ab6387b4614c26bd86b3fd00efe0','763a14059ec092171363a6ea1efe4a32667445bf']
+          pieces=[]
+          for i,sha in enumerate(shas):
+              blob=json.loads(subprocess.check_output(['gh','api',f'repos/{os.environ["GH_REPO"]}/git/blobs/{sha}']))
+              data=base64.b64decode(blob['content'])
+              expected=sha
+              if i==3:
+                  # Repair a transcription error in the encoded transport, not source.
+                  data=data.replace(b'G3a3oq8Fop',b'G3a3o8Fop')
+                  expected='3e3f7e33ba62467e97fc5e16c6ae0babd73fef7f'
+              assert hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()==expected
+              pieces.append(data)
+          patch=gzip.decompress(base64.b64decode(b''.join(pieces),validate=True))
+          assert len(patch)==112668
+          assert hashlib.sha256(patch).hexdigest()=='2705f79d773182ac69657795639ea5a86d95df386a42fa6e63f1e442fcc61865'
+          target=Path(os.environ['RUNNER_TEMP'])/'reviewed.patch';target.write_bytes(patch)
+          subprocess.run(['git','apply','--check','--unidiff-zero',str(target)],check=True)
+          subprocess.run(['git','apply','--unidiff-zero',str(target)],check=True)
+          PY
+          git rm DESIGN.md
+      - name: Build and verify extension
+        run: bun install --frozen-lockfile && bun run check
+      - name: Verify generated bundles and unchanged host permissions
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,subprocess
+          from pathlib import Path
+          expected={'panel/main.js':'369edb10c79bc4e905fed1dd56702e25c2cf4c90b39b1d00f119047dc433916e','service/main.js':'512ddb3f51882bfe7680ac38fca4d7bd5e5b6484811b1bf71c78322d6890b4a1'}
+          for path,digest in expected.items(): assert hashlib.sha256(Path(path).read_bytes()).hexdigest()==digest,path
+          before=json.loads(subprocess.check_output(['git','show','978047cfe2d3cd3c9175f406625ab6c96c7ec0c8:package.json']))
+          after=json.loads(Path('package.json').read_text())
+          for key in ['dependencies','devDependencies','openchamber','files']: assert before[key]==after[key],key
+          assert after['version']=='0.5.6'
+          PY
+          git diff --exit-code -- bun.lock .github/workflows/ci.yml
+      - name: Commit reviewed source
+        run: |
+          set -euo pipefail
+          git fetch origin work/polish-0.5.6
+          test "$(git rev-parse FETCH_HEAD)" = "$GITHUB_SHA"
+          git rm .github/workflows/prepare-056.yml
+          git add -A
+          git diff --cached --name-only | grep -E '(^node_modules/|^dist/|\.p12$|\.p8$|\.pem$|\.key$)' && exit 1 || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Refine host theming and add secure Mac update checks'
+          git push origin HEAD:work/polish-0.5.6
