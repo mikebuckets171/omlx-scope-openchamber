@@ -41,7 +41,7 @@ OpenChamber/oMLX verification separately before declaring a release qualified.
 The panel uses the SDK guest bundler. The service uses stock `bun build` with
 `--target=node --format=esm --minify-whitespace`; function/variable names remain
 intact. The JSONC ESM import and extracted-Node-package smoke test must be kept.
-The 160 KiB uncompressed package budget is unchanged. Tests cover progress and
+The reviewed uncompressed package allowance is 224 KiB. Changes must also bound polling, retained observations, and DOM growth; file size alone is not an efficiency measurement. Tests cover progress and
 preference races as well as the published SDK storage/clipboard message contracts.
 
 Prefill changes must cover missing counters, incomplete stages, cache reuse,

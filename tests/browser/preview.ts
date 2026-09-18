@@ -224,3 +224,101 @@ test('prefill layout is legible from a narrow panel to a full page', async ({ pa
   }
   expect(errors).toEqual([]);
 });
+
+test('prefill stage estimate accompanies remaining percent and disappears on pause or stale progress', async ({ page }) => {
+  const frame = await openPanel(page, 'state=prefill');
+  await expect(frame.locator('#prefill-eta')).toHaveText('~20s');
+  await expect(frame.locator('#prefill-remaining')).toHaveText('36% remaining');
+  await frame.locator('#compact').click(); await expect(frame.locator('#prefill-estimate')).toBeVisible();
+  await frame.locator('#pause').click(); await expect(frame.locator('#prefill-estimate')).toBeHidden();
+  await frame.locator('#pause').click();
+  await page.evaluate(() => (window as any).setPreviewState('prefill-stale'));
+  await frame.locator('#refresh').click();
+  await expect(frame.locator('#prefill-estimate')).toBeHidden();
+  await expect(frame.locator('#prefill-remaining')).toHaveText('36% remaining');
+});
+
+test('recent speed uses observations and is cleared on monitoring gaps', async ({ page }) => {
+  const frame = await openPanel(page);
+  await expect(frame.locator('#window-speed')).toContainText('tok/s', { timeout: 7000 });
+  await expect(frame.locator('#window-span')).toContainText('Observed over');
+  await frame.locator('#pause').click(); await expect(frame.locator('#recent-speed')).toBeHidden();
+  await expect(frame.locator('#recent-list')).toContainText('Monitoring gap');
+  await frame.locator('#pause').click();
+  await expect(frame.locator('#window-speed')).toHaveText('Gathering samples…');
+});
+
+test('recent generations capture last seen values, copy sanitized observations, and clear without resetting runtime', async ({ page }) => {
+  const frame = await openPanel(page, 'long=1');
+  await page.evaluate(() => (window as any).setPreviewState('idle'));
+  await frame.locator('#refresh').click();
+  await expect(frame.locator('#recent-list .generation-row')).toHaveCount(1);
+  await expect(frame.locator('#recent-list')).toContainText('tokens last seen');
+  const before = await requests(page);
+  await frame.locator('#copy-recent').click();
+  const copied = await page.evaluate(() => (window as any).previewCopied);
+  expect(copied).toContain('not final'); expect(copied).not.toMatch(/publisher|large-context|request_id|api_key/);
+  await frame.locator('#clear-recent').click();
+  await expect(frame.locator('#recent-list .generation-row')).toHaveCount(0);
+  await expect(frame.locator('#copy-recent')).toBeDisabled();
+  await expect(frame.locator('#action-status')).toContainText('Runtime statistics were not changed');
+  expect(await requests(page)).toBeLessThanOrEqual(before + 1);
+});
+
+test('resident roster reveals concurrent model activity with text-only labels', async ({ page }) => {
+  const frame = await openPanel(page, 'multi=1');
+  await expect(frame.locator('#resident-list .resident-row')).toHaveCount(2);
+  await expect(frame.locator('#resident-list')).toContainText('77% left');
+  await page.evaluate(() => (window as any).setPreviewOverride({ residentModels: [{ id:'<img src=x onerror=alert(1)>', phase:'idle', activeRequests:0 }] }));
+  await frame.locator('#refresh').click();
+  await expect(frame.locator('#resident-list img')).toHaveCount(0);
+  await expect(frame.locator('#resident-list')).toContainText('<img');
+  await page.evaluate(() => { (window as any).setPreviewOverride({}); (window as any).setPreviewState('offline'); });
+  await frame.locator('#refresh').click(); await expect(frame.locator('#resident-section')).toBeHidden();
+});
+
+test('cache lens separates reused input from prefill and exposes unavailable values', async ({ page }) => {
+  const frame = await openPanel(page, 'state=prefill');
+  await expect(frame.locator('#cache-reuse-count')).toHaveText('43,000');
+  await expect(frame.locator('#cache-new-count')).toHaveText('9,100');
+  await expect(frame.locator('#cache-input-bar')).toHaveAttribute('aria-label', /43,000.*9,100/);
+  await page.evaluate(() => (window as any).setPreviewOverride({cachedTokens: null}));
+  await frame.locator('#refresh').click();
+  await expect(frame.locator('#cache-new-count')).toHaveText('—');
+  await expect(frame.locator('#cache-input-bar')).toHaveAttribute('data-available', 'false');
+});
+
+test('enhanced workspace and panel render without overflow, runtime errors or hidden prefill', async ({ page }, info) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+  for (const theme of ['dark', 'light']) for (const width of [320, 1160]) {
+    await page.setViewportSize({width, height: 1400});
+    const frame = await openPanel(page, `theme=${theme}&multi=1&surface=${width === 1160 ? 'page' : 'panel'}`);
+    await page.evaluate(() => (window as any).setPreviewEpoch(2));
+    await frame.locator('#refresh').click();
+    await expect(frame.locator('#recent-list .generation-row')).toHaveCount(1);
+    await page.evaluate(() => (window as any).setPreviewState('prefill'));
+    await frame.locator('#refresh').click();
+    await expect(frame.locator('#prefill-remaining')).toHaveText('36% remaining');
+    await expect(frame.locator('#prefill-estimate')).toBeVisible();
+    expect(await frame.locator('main').evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+    await frame.locator('main').screenshot({path: info.outputPath(`enhanced-${theme}-${width}.png`)});
+  }
+  expect(errors).toEqual([]);
+});
+
+test('new observation history is not persisted across reloads', async ({ page }) => {
+  const frame = await openPanel(page);
+  await frame.locator('#pause').click(); await expect(frame.locator('#recent-list .generation-row')).toHaveCount(1);
+  const writes = await page.evaluate(() => (window as any).previewWrites);
+  expect(writes).toBe(0);
+  await page.reload();
+  await expect(page.frameLocator('iframe').locator('#recent-list .generation-row')).toHaveCount(0);
+});
+
+test('copy recent handles denied clipboard without claiming success', async ({ page }) => {
+  const frame = await openPanel(page, 'clipboard=fail');
+  await frame.locator('#pause').click(); await frame.locator('#copy-recent').click();
+  await expect(frame.locator('#action-status')).toContainText('Could not copy observations');
+});

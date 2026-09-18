@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.4 — 2026-09-18
+
+- Added a runtime-reported prefill stage time estimate beside percentage remaining.
+- Added recent generation speed based on observed output-token changes.
+- Added memory-only recent generation observations, with copy and clear controls.
+- Added a cache/input breakdown and concurrent model activity roster.
+- Kept compact view, saved preferences, read-only access, and the service-startup fix.
+- No dependency or permission changes. The optional Mac companion is unchanged.
+
 ## 0.5.3 — 2026-09-18
 
 - Restored a prominent prefill percentage remaining, with processed/total counts.

@@ -9,6 +9,7 @@ import { Poller } from './poller.ts';
 import { prefillReading } from './progress.ts';
 import { Preferences, type PreferenceKey } from './preferences.ts';
 import { measurementReport } from './report.ts';
+import { InsightView } from './insights-view.ts';
 import { version } from '../package.json';
 
 const host = connectHost();
@@ -37,7 +38,9 @@ root.innerHTML = `
       <div class="prefill-values"><strong id="prefill-remaining">—</strong><span id="prefill-completed">—</span></div>
       <div id="prefill-track" class="progress-track" role="progressbar" aria-label="Prefill stage completed" aria-valuemin="0" aria-valuemax="100"><span></span></div>
       <p id="prefill-counts" class="prefill-counts"></p>
+      <div id="prefill-estimate" class="prefill-estimate" hidden><span>Estimated stage time left</span><strong id="prefill-eta">—</strong><small>oMLX estimate · may change</small></div>
     </section>
+    <div id="recent-speed" class="recent-speed" hidden><strong id="window-speed">—</strong><span id="window-span">Recent generation speed</span></div>
     <p id="request-output" class="request-output" hidden></p>
     <figure id="signal" class="signal" role="img" aria-label="No observed throughput yet">
       <div class="chart-top"><span id="chart-title">Request throughput</span><span id="ceiling">tok/s</span></div>
@@ -49,6 +52,13 @@ root.innerHTML = `
       <div><span class="metric-label">Prefix reused</span><strong id="reuse">—</strong><span id="reuse-detail" class="metric-detail">Not reported</span><div class="meter" aria-hidden="true"><i id="reuse-bar"></i></div></div>
       <div><span class="metric-label">Requests</span><strong id="requests">—</strong><span id="queue" class="metric-detail">Waiting for oMLX</span></div>
     </div>
+    <section id="recent-generations" class="insight-section" aria-labelledby="recent-title">
+      <div class="section-heading"><h2 id="recent-title">Recent generations</h2><span id="recent-count">0 / 8</span></div>
+      <p class="insight-note">Last-seen request averages · not final results</p>
+      <ol id="recent-list" class="recent-list"><li class="insight-note">Generations appear here after they leave the active view.</li></ol>
+      <div class="insight-actions"><button id="copy-recent" type="button" disabled>Copy recent</button><button id="clear-recent" type="button" disabled title="Clear this view’s observation history, not runtime statistics">Clear history</button></div>
+      <p class="insight-note">Only observed while this view is open. Gaps and aborted requests are not treated as successful completions. Held in memory, not saved to disk.</p>
+    </section>
   </section>
   <aside class="side-stack" aria-label="Host resources and server statistics">
   <section id="machine" class="machine" aria-labelledby="machine-title" hidden>
@@ -66,6 +76,20 @@ root.innerHTML = `
     </div>
     <p class="machine-explanation">Whole host, not oMLX alone. Non-free RAM includes reclaimable pages; it is not Activity Monitor’s Memory Used.</p>
   </section>
+  <section id="cache-lens" class="insight-section" aria-labelledby="cache-title">
+    <div class="section-heading"><h2 id="cache-title">Cache &amp; input</h2><span>Current request</span></div>
+    <p id="cache-request-state" class="insight-note">Waiting for cache readings</p>
+    <div class="cache-input-values"><div><span>Reused tokens</span><strong id="cache-reuse-count">—</strong></div><div><span>Not reused</span><strong id="cache-new-count">—</strong></div></div>
+    <div id="cache-input-bar" class="cache-input-bar" role="img" aria-label="Input cache reuse"><span id="cache-reused-fill"></span></div>
+    <div class="cache-tier-values"><div><span>RAM cache</span><strong id="cache-ram-size">—</strong></div><div><span>SSD cache</span><strong id="cache-ssd-size">—</strong></div></div>
+    <p id="cache-bank-state" class="insight-note">Server cache totals</p>
+    <p class="insight-note">Unreused input is not necessarily the size of a prefill stage.</p>
+  </section>
+  <section id="resident-section" class="insight-section" aria-labelledby="resident-title" hidden>
+    <div class="section-heading"><h2 id="resident-title">Loaded models</h2><span id="resident-count"></span></div>
+    <ul id="resident-list" class="resident-list"></ul><p id="resident-note" class="insight-note"></p>
+  </section>
+  <p id="runtime-advisory" class="runtime-advisory" role="status" hidden></p>
   <section id="session-stats" class="session" aria-labelledby="session-title"><div class="section-heading"><h2 id="session-title">Server session</h2><span id="uptime">Since start / reset</span></div><div class="session-values"><div><span>Decode average</span><strong id="average-decode">—</strong></div><div><span>Prefill average</span><strong id="average-prefill">—</strong></div><div><span>Cache efficiency</span><strong id="average-cache">—</strong></div></div><p id="session-stats-state" class="native-note">Completed requests across all models</p></section>
   <details class="details"><summary>Runtime details<span aria-hidden="true">+</span></summary><dl>
     <div><dt>oMLX process footprint</dt><dd id="process-memory">—</dd></div>
@@ -91,6 +115,7 @@ const button = node('refresh') as HTMLButtonElement;
 const shell = root.querySelector<HTMLElement>('.scope')!;
 const signal = new SignalHistory();
 const resources = new ResourceHistory();
+const insightView = new InsightView(root);
 const pauseButton = node('pause') as HTMLButtonElement;
 let lastSystem: SystemSnapshot | null = null;
 let userPaused = false;
@@ -185,6 +210,7 @@ const update = (snapshot: TelemetrySnapshot): void => {
   text('notice', stale ? last ? `${age(last.sampledAt)}. Retained details are not live.` : 'Read-only connection · check your local oMLX endpoint and credential.' : '');
   hidden('notice', !stale);
   renderProgress(current);
+  insightView.update(snapshot);
   const hasOutput = current !== null && ['decode', 'processing'].includes(current.phase) && current.completionTokens !== null;
   hidden('request-output', !hasOutput);
   text('request-output', hasOutput ? `${current.completionTokens!.toLocaleString()} output tokens${current.elapsedSeconds !== null ? ` · ${number.format(current.elapsedSeconds)}s elapsed` : ''}` : '');
@@ -263,7 +289,7 @@ const syncMonitoring = (): void => {
   monitorGeneration += 1;
   poller.setPaused(userPaused || document.hidden);
   if (userPaused || document.hidden) {
-    clearFreshness(); resources.break(); signal.break();
+    clearFreshness(); resources.break(); signal.break(); insightView.suspend();
   } else armFreshness();
 };
 pauseButton.addEventListener('click', () => {
@@ -312,6 +338,13 @@ const savePreference = (key: PreferenceKey, value: boolean): void => {
 };
 node('efficiency').addEventListener('click', () => savePreference('efficient', !efficient));
 node('compact').addEventListener('click', () => savePreference('compact', !compactView));
+node('clear-recent').addEventListener('click', () => { insightView.clear(); actionStatus('Observation history cleared here. Runtime statistics were not changed.'); });
+node('copy-recent').addEventListener('click', async () => {
+  try {
+    await host.writeClipboard(insightView.report(version));
+    if (!disposed) actionStatus('Recent observations copied without model names or request data.');
+  } catch { if (!disposed) actionStatus('Could not copy observations. The clipboard was not confirmed.'); }
+});
 node('copy-stats').addEventListener('click', async () => {
   const copy = node('copy-stats') as HTMLButtonElement;
   copy.disabled = true;
@@ -339,5 +372,5 @@ host.onReady((ready) => {
   poller.start();
 });
 document.addEventListener('visibilitychange', syncMonitoring);
-window.addEventListener('pagehide', (event) => { poller.stop(); clearFreshness(); resources.break(); signal.break(); monitorGeneration += 1; if (!event.persisted) { disposed = true; host.dispose(); } });
+window.addEventListener('pagehide', (event) => { poller.stop(); clearFreshness(); resources.break(); signal.break(); insightView.suspend(); monitorGeneration += 1; if (!event.persisted) { disposed = true; host.dispose(); } });
 window.addEventListener('pageshow', (event) => { if (event.persisted && mounted) { syncMonitoring(); poller.start(); } });

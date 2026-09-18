@@ -10,6 +10,10 @@ window.previewCopied = '';
 window.previewWrites = 0;
 const sessionItem = params.get('item') === 'session' ? {kind:'session', action:'open-omlx-scope', sessionId:'synthetic-session', sessionTitle:params.get('sessionTitle') || 'Synthetic session', directory:null} : null;
 let samples = 0;
+let previewEpoch = 1;
+window.setPreviewEpoch = value => { previewEpoch = value; };
+window.previewOverride = {};
+window.setPreviewOverride = value => { window.previewOverride = value; };
 window.previewRequests = 0;
 const tokens = {
   background: light ? '#f7f9fb' : '#10151b', foreground: light ? '#172a37' : '#e9f0f5',
@@ -50,6 +54,8 @@ if(m.type === 'hello') { post({type:'ready',payload:{theme:{mode:light?'light':'
   const payload = {
     available, reason: available ? null : phase === 'auth' ? 'authentication_failed' : 'runtime_unreachable',
     message: available ? null : phase === 'auth' ? 'The saved credential was rejected by oMLX.' : 'oMLX is not responding. Start the server, then refresh.',
+    prefillETASeconds: phase==='prefill' ? 17.75 : null,
+    residentModels:[{id:'Qwen3.8-27B-4bit',phase:phase==='notLoaded'?'idle':phase,activeRequests:1,queuedRequests:0,allocationGB:17.1,tokensPerSecond:24.6,prefillProgress:phase==='prefill'?.64:null,progressStale:state==='prefill-stale'},...(params.has('multi') ? [{id:'Qwen3.6-35B-A3B-4bit',phase:'prefill',activeRequests:1,queuedRequests:0,allocationGB:20.4,tokensPerSecond:280,prefillProgress:.23,progressStale:false}] : [])],residentModelCount:params.has('multi')?2:1,
     runtime:'omlx',phase,sessionStatsState:params.get('stats') || 'fresh',
     modelID:phase === 'notLoaded' ? null : params.get('long') ? 'publisher/a-very-long-model-name-with-a-large-context-window-and-quantization-details-27B-4bit' : 'Qwen3.8-27B-4bit',
     liveDecodeTPS:phase === 'decode' ? 24.6 + Math.sin(samples / 3) * 1.4 : null,
@@ -57,7 +63,7 @@ if(m.type === 'hello') { post({type:'ready',payload:{theme:{mode:light?'light':'
     promptTokens:['decode','prefill'].includes(phase)?52100:null,cachedTokens:['decode','prefill'].includes(phase)?43000:null,completionTokens:phase==='decode'?6482+samples*12:null,
     prefillProgress:phase==='prefill' && state!=='prefill-missing'?.64:null,prefillProcessedTokens:phase==='prefill' ? state==='prefill-missing'?null:5824 :null,prefillTotalTokens:phase==='prefill' ? state==='prefill-missing'?null:state==='prefill-malformed'?0:9100:null,prefillProgressStale:state==='prefill-stale', elapsedSeconds:phase==='decode'?260+samples/2:null,activeRequests:['decode','prefill','processing'].includes(phase)?1:0,queuedRequests:phase==='queued'?2:0,contextWindow:131072,
     memory:{activeGB:34.5,modelGB:17.1,cacheGB:3.2,peakGB:null},sessionBank:{hot:{entries:7,totalGB:3.2},cold:{entries:188,totalGB:22.4},lastMissReason:'prefix_hit'},
-    memoryPressureLevel:1,memoryPressureSource:'oMLX process memory guard',lifetime:{requestsTotal:381,uptimeSeconds:51420},sampledAt:Date.now(),traceEpoch:1,
+    memoryPressureLevel:1,memoryPressureSource:'oMLX process memory guard',lifetime:{requestsTotal:381,uptimeSeconds:51420},sampledAt:Date.now(),traceEpoch:previewEpoch,
     system: params.get('system') === 'missing' ? null : {
       platform: params.get('system') === 'linux' ? 'linux' : 'darwin',
       cpuModel: 'Apple Silicon · synthetic fixture',logicalCores:18,
@@ -66,6 +72,8 @@ if(m.type === 'hello') { post({type:'ready',payload:{theme:{mode:light?'light':'
       sampledAt:Math.floor(Date.now() / 10000) * 10000},
     },
   };
+  if (phase === 'notLoaded') { payload.residentModels = []; payload.residentModelCount = 0; }
+  Object.assign(payload, window.previewOverride);
   post({type:'result',id:m.id,ok:true,payload:{status:200,body:JSON.stringify(payload)}});
 });
 </script></body></html>

@@ -71,3 +71,44 @@ is not a live OpenChamber/oMLX hardware test. Unsupported shapes remain unavaila
 
 The host resource sampler uses Node's public OS APIs and macOS command-line
 utilities. No private GPU, thermal, fan, or memory-pressure API is used.
+
+
+## Session insights (0.5.4)
+
+**Stage estimate** comes from oMLX's `prefilling[].eta`, provided with valid
+processed/total counters and positive reported speed. It is rounded up for display,
+updated only when a new sample arrives, and removed for paused, stale, malformed,
+completed, or ambiguous stages. It is not time to first token or time to completion;
+stages may change, and oMLX can revise its estimate. No synthetic countdown runs.
+
+**Recent speed** is the change in generated-token counts divided by observed wall
+time over up to ten seconds. It needs at least three samples spanning two seconds.
+It is separate from oMLX's request average and is not an instantaneous GPU measure.
+The window resets for a different request/model, backwards counters/clocks,
+missing identity, stale output, or monitoring gaps. It holds at most 24 points.
+
+**Recent generations** keeps eight last-seen generation observations in this view's
+memory. A disappearing request might have completed, been cancelled, or become
+unobservable. Therefore rows are labelled *No longer observed* or *Monitoring gap*,
+never successful completions. Output totals and average speed are the last sample,
+not guaranteed final totals. Peak footprint is the maximum *observed* process value,
+not peak GPU memory or memory solely attributable to that request. Hidden/pause/offline
+boundaries end the observation. Nothing is recorded while the view is closed.
+Reloading clears it. Copy recent strips model names, paths, raw errors and request
+identifiers; Clear history affects only the view, not oMLX statistics.
+
+**Cache & input** uses reported prompt and reused tokens. Unreused input is not
+necessarily a prefill-stage size, particularly for staged or selective prefills.
+RAM/SSD cache sizes are server-wide session statistics, separately labelled if
+unavailable/stale; overlapping categories are not added to model allocations.
+
+**Loaded models** exposes up to 12 allowlisted summaries from the existing activity
+response, with the reported total count. Multiple models can each show a valid
+single-request rate, while the main summary withholds ambiguous combined rates.
+Concurrency within one model still suppresses its per-request rate/progress.
+This roster neither loads/switches models nor assigns activity to a selected chat.
+
+The extension makes no additional oMLX requests for these views. They share existing
+polls, and no background timer, database, watcher, or library was added. The reviewed
+uncompressed installation allowance is 224 KiB; it is a packaging guardrail, not a
+claim about process memory or battery consumption.

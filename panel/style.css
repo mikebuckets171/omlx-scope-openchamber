@@ -178,3 +178,41 @@ footer { color: var(--oc-muted); font-size: 9px; margin-top: 14px; }
 .scope[data-compact="true"] .machine { margin-top:18px; }
 .scope[data-compact="true"] .metrics { padding-top:16px; padding-bottom:16px; }
 @media (max-width:370px) { #prefill-remaining { font-size:21px; } .prefill-progress { padding:12px; } #cadence { font-size:8px; } .view-tools { gap:6px; } }
+
+/* Session insight surfaces stay observation-driven, with no perpetual animation. */
+.prefill-estimate { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 12px; border-top:1px solid var(--scope-line); padding-top:11px; margin-top:12px; }
+.prefill-estimate > span { color:var(--oc-muted); font-size:10px; }
+.prefill-estimate strong { margin-left:auto; font-size:17px; font-weight:550; font-variant-numeric:tabular-nums; }
+.prefill-estimate small { width:100%; color:var(--oc-muted); font-size:9px; }
+.recent-speed { display:flex; align-items:baseline; flex-wrap:wrap; gap:5px 10px; margin-top:12px; }
+.recent-speed strong { color:var(--scope-accent); font-size:14px; font-weight:550; font-variant-numeric:tabular-nums; }
+.recent-speed span { color:var(--oc-muted); font-size:10px; }
+.insight-section { margin-top:23px; padding-top:20px; border-top:1px solid var(--scope-line); min-width:0; }
+.insight-note { font-size:10px; line-height:1.65; color:var(--oc-muted); margin-top:6px; }
+.cache-input-values, .cache-tier-values { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:14px; }
+.cache-input-values span, .cache-tier-values span { display:block; font-size:10px; color:var(--oc-muted); }
+.cache-input-values strong { display:block; font-size:21px; margin-top:2px; font-weight:510; letter-spacing:-.5px; font-variant-numeric:tabular-nums; }
+.cache-input-values > div:first-child strong { color:var(--scope-accent); }
+.cache-input-bar { height:7px; background:var(--scope-blue); border-radius:5px; overflow:hidden; margin:12px 0; }
+.cache-input-bar[data-available="false"] { background:var(--scope-line); }
+.cache-input-bar > span { display:block; width:0; height:100%; background:var(--oc-success-text); }
+.cache-tier-values strong { display:block; font:12px var(--oc-mono,monospace); margin-top:3px; }
+.resident-list, .recent-list { list-style:none; padding:0; margin:12px 0; }
+.resident-row, .generation-row { border-top:1px solid var(--scope-line); padding:12px 0; }
+.resident-row:first-child, .generation-row:first-child { border-top:0; }
+.resident-heading, .resident-reading, .generation-heading, .generation-values { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+.resident-heading strong, .generation-heading strong { font-size:11px; font-weight:530; overflow-wrap:anywhere; min-width:0; }
+.resident-heading > span { font-size:10px; color:var(--scope-accent); flex-shrink:0; }
+.resident-reading { color:var(--oc-muted); font-size:10px; margin-top:6px; flex-wrap:wrap; font-variant-numeric:tabular-nums; }
+.generation-heading time { color:var(--oc-muted); font-size:9px; flex-shrink:0; }
+.generation-values { margin-top:7px; flex-wrap:wrap; }
+.generation-values strong { font:15px var(--oc-mono,monospace); }
+.generation-values > span { color:var(--oc-muted); font-size:10px; }
+.insight-actions { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+.insight-actions button { font:10px var(--oc-font,sans-serif); border:1px solid var(--scope-line); border-radius:7px; color:var(--oc-muted); background:transparent; padding:6px 10px; cursor:pointer; }
+.insight-actions button:hover:not(:disabled) { color:var(--scope-accent); background:var(--scope-surface); }
+.insight-actions button:disabled { opacity:.45; cursor:default; }
+.runtime-advisory { margin-top:16px; padding:12px; border-left:2px solid var(--oc-warning-text); color:var(--oc-muted); background:var(--scope-surface); font-size:10px; }
+.scope[data-compact="true"] #cache-lens, .scope[data-compact="true"] #recent-generations, .scope[data-compact="true"] #resident-section { display:none; }
+.scope[data-paused="true"] .cache-input-values, .scope[data-paused="true"] .cache-tier-values, .scope[data-paused="true"] .resident-list { opacity:.55; }
+@media (min-width:900px) { #recent-generations { margin-top:28px; } .insight-section .section-heading h2 { font-size:13px; } }

@@ -112,7 +112,7 @@ try {
   await stop(service);
   assert.equal(service.result.code, 0, 'Service did not stop cleanly.');
   // Exercise real HTTP collection through the extracted, minified Node bundle.
-  let flight = { request_id: 'private-smoke-request', processed: 64, total: 100, speed: 184 };
+  let flight = { request_id: 'private-smoke-request', processed: 64, total: 100, speed: 184, eta: 0.2 };
   mockRuntime = createHTTPServer((request, response) => {
     const path = new URL(request.url, 'http://127.0.0.1').pathname;
     let body;
@@ -137,6 +137,9 @@ try {
   const activeSnapshot = await (await get('/snapshot')).json();
   assert.equal(activeSnapshot.available, true);
   assert.equal(activeSnapshot.prefillProgress, 0.64);
+  assert.equal(activeSnapshot.prefillETASeconds, 0.2);
+  assert.equal(activeSnapshot.residentModelCount, 1);
+  assert.equal(activeSnapshot.residentModels[0].prefillProgress, 0.64);
   assert.equal(activeSnapshot.prefillProcessedTokens, 64);
   assert.equal(activeSnapshot.prefillTotalTokens, 100);
   assert.equal(activeSnapshot.prefillProgressStale, false);
@@ -146,6 +149,8 @@ try {
   await delay(550);
   const invalid = await (await get('/snapshot')).json();
   assert.equal(invalid.prefillProgress, null, 'Malformed progress must not become 100% complete.');
+  assert.equal(invalid.prefillETASeconds, null);
+  assert.equal(invalid.residentModels[0].prefillProgress, null);
   await stop(activeService);
   console.log('PASS: packaged prefill counters and invalid-progress rejection verified against loopback fixture.');
   console.log('PASS: packaged Node service starts without node_modules; /health, /snapshot, JSONC, authentication, startup errors, and shutdown verified.');
