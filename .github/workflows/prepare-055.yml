@@ -1,0 +1,67 @@
+name: Prepare coordinated update
+on:
+  push:
+    branches: [work/experience-0.5.5]
+    paths: [.github/workflows/prepare-055.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    if: github.repository == 'mikebuckets171/omlx-scope-openchamber' && github.ref == 'refs/heads/work/experience-0.5.5'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: mikebuckets171/omlx-scope-openchamber
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: Apply checksum-verified source changes
+        run: |
+          set -euo pipefail
+          git diff --exit-code 29568bc3eb6d02780ff0c3097c98599600f4e430 HEAD -- . ':!.github/workflows/workspace-055.yml' ':!.github/workflows/prepare-055.yml'
+          for SHA in f37d46c29d62fbe579669f9da5107f881da6600e 1a427941d2fdc5b193eee1aeb58fa5f9a03765f9 3fa96a7b6e37310686d94d3a0000d48d769fb86c; do
+            gh api "repos/$GH_REPO/git/blobs/$SHA" > "$RUNNER_TEMP/$SHA.json"
+          done
+          python3 - <<'PY'
+          import base64,gzip,hashlib,json,os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          shas=['f37d46c29d62fbe579669f9da5107f881da6600e','1a427941d2fdc5b193eee1aeb58fa5f9a03765f9','3fa96a7b6e37310686d94d3a0000d48d769fb86c']
+          encoded=b''.join(base64.b64decode(json.loads((root/(sha+'.json')).read_text())['content']) for sha in shas)
+          patch=gzip.decompress(base64.b64decode(encoded,validate=True))
+          assert hashlib.sha256(patch).hexdigest()=='3d3553e31351380c67e01d8ef2e2746bdccf2f7f1a7d40146f90ac99302c43ab'
+          (root/'changes.patch').write_bytes(patch)
+          PY
+          git apply --check --unidiff-zero "$RUNNER_TEMP/changes.patch"
+          git apply --unidiff-zero "$RUNNER_TEMP/changes.patch"
+      - name: Build and verify extension
+        run: bun install --frozen-lockfile && bun run check
+      - name: Check generated bundles and preserved permissions
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,subprocess
+          from pathlib import Path
+          expected={'panel/main.js':'5b4a34568f1062bd34446d100bc630f27713035d22d0bb0716daeac83deb66a4','service/main.js':'512ddb3f51882bfe7680ac38fca4d7bd5e5b6484811b1bf71c78322d6890b4a1'}
+          for path,digest in expected.items(): assert hashlib.sha256(Path(path).read_bytes()).hexdigest()==digest,path
+          before=json.loads(subprocess.check_output(['git','show','29568bc3eb6d02780ff0c3097c98599600f4e430:package.json']))
+          after=json.loads(Path('package.json').read_text())
+          for key in ['dependencies','devDependencies','openchamber','files']: assert before[key]==after[key],key
+          assert after['version']=='0.5.5'
+          PY
+          git diff --exit-code -- bun.lock
+      - name: Commit source and generated bundles
+        run: |
+          set -euo pipefail
+          git fetch origin work/experience-0.5.5
+          test "$(git rev-parse FETCH_HEAD)" = "$GITHUB_SHA"
+          git rm .github/workflows/workspace-055.yml .github/workflows/prepare-055.yml
+          git add .github/workflows/ci.yml .gitignore CHANGELOG.md PRIVACY.md README.md dev/preview.html docs/METRICS.md macOS package.json panel service tests/browser/preview.ts
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Add performance captures, chat drafts, and adaptive prefill menu bar'
+          git push origin HEAD:work/experience-0.5.5
