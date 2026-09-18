@@ -82,3 +82,18 @@ view's memory, including the displayed model name and numeric measurements. It d
 not persist these summaries, read chat content, or receive runtime request IDs.
 Closing/reloading the view clears them. Copy recent is an explicit user action and
 excludes model names, credentials, paths, and request identifiers.
+
+
+## OpenChamber context and captures
+
+The extension displays the current session title, agent, and busy state supplied by
+OpenChamber's SDK. It does not read the conversation or infer which request belongs
+to that chat. **Add stats to chat** explicitly appends a measurement-only report to
+the current composer draft; it never sends, replaces a draft, or calls a model.
+
+A performance capture keeps two bounded summaries (current and pinned reference)
+and one token counter in this view's memory. It uses existing observations, stores
+nothing on disk, and ends when monitoring is interrupted. Exported captures exclude
+model/session names, paths, credentials, prompts, and request identifiers. Removing
+the view discards its captures. These observations are not successful-completion
+records or controlled benchmarks.

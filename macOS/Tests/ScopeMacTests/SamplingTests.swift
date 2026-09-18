@@ -30,3 +30,22 @@ final class SamplingTests: XCTestCase {
         XCTAssertTrue(model.menuText.contains("t/s"))
     }
 }
+
+extension SamplingTests {
+    @MainActor func testActivityMenuSwitchesPrefillToDecodeAndRetainsChoice() {
+        let model = MonitorModel(preview:true)
+        var r = RuntimeReading(); r.phase = .prefill; r.prefillProcessed = 5824; r.prefillTotal = 9100; r.rate = 180
+        model.setPreview(runtime:r,host:HostReading(),rates:[]); model.menuReadout = .speed
+        XCTAssertEqual(model.menuText,"36% left")
+        model.progressDisplay = .completed; XCTAssertEqual(model.menuText,"64% done")
+        r.phase = .decode; r.rate = 24.8; model.runtime = r; XCTAssertEqual(model.menuText,"24.8 t/s")
+        model.togglePause(); XCTAssertEqual(model.menuText,"Paused")
+    }
+    @MainActor func testHiddenResourceReadoutAvoidsRuntimeRequests() async throws {
+        let client = OmlxClient { _ in XCTFail("Resource-only hidden mode must not request oMLX"); throw ConnectionError.unreachable }
+        let model = MonitorModel(client:client,sampler:{HostReading()},defaults:UserDefaults(suiteName:UUID().uuidString)!)
+        model.menuReadout = .cpu; model.start(); defer { model.stop() }
+        try await Task.sleep(for:.milliseconds(150))
+        XCTAssertEqual(model.samples,1); XCTAssertEqual(model.runtime.phase,.connecting)
+    }
+}

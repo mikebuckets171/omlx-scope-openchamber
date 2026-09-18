@@ -74,7 +74,7 @@ final class ScopeCoreTests: XCTestCase {
         XCTAssertEqual(SamplingPolicy.cpuPercent(previous: [10, 0, 90, 0], current: [20, 0, 180, 0]), 10)
         XCTAssertNil(SamplingPolicy.cpuPercent(previous: [20, 0, 180, 0], current: [10, 0, 90, 0]))
         XCTAssertEqual(SamplingPolicy.interval(visible: true, active: true, lowPower: false, efficient: false, failures: 0), 1)
-        XCTAssertEqual(SamplingPolicy.interval(visible: false, active: true, lowPower: false, efficient: false, failures: 0), 5)
+        XCTAssertEqual(SamplingPolicy.interval(visible: false, active: true, lowPower: false, efficient: false, failures: 0), 2)
         XCTAssertEqual(SamplingPolicy.interval(visible: false, active: true, lowPower: true, efficient: false, failures: 0), 10)
         XCTAssertEqual(SamplingPolicy.interval(visible: true, active: false, lowPower: false, efficient: false, failures: 500), 30)
     }

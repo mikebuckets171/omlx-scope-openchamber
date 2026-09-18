@@ -27,6 +27,10 @@ public struct RuntimeReading: Sendable, Equatable {
     public var prompt: Double?
     public var reused: Double?
     public var output: Double?
+    public var prefillProcessed: Double?
+    public var prefillTotal: Double?
+    public var prefillETA: Double?
+    public var progressStale = false
     public var progress: Double?
     public var elapsed: Double?
     public var modelBytes: Double?

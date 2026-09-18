@@ -124,7 +124,8 @@ public actor OmlxClient {
             }
             if currentProcessed != processed { processed = currentProcessed; changedAt = clock() }
             if result.phase == .prefill && clock() - changedAt >= 15 {
-                result.rate = nil; result.message = "Prefill active. Waiting for fresh progress."
+                result.rate = nil; result.prefillETA = nil; result.progressStale = true
+                result.message = "Prefill active. Waiting for fresh progress."
             }
             result.epoch = epoch
             return result

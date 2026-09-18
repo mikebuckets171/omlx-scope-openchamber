@@ -28,7 +28,7 @@ public enum SamplingPolicy {
     /// No timer or sampling while paused/asleep. No network for a hidden icon-only app.
     public static func interval(visible: Bool, active: Bool, lowPower: Bool,
                                 efficient: Bool, failures: Int) -> TimeInterval {
-        let base: Double = visible ? (efficient || lowPower ? 3 : (active ? 1 : 3)) : (lowPower || efficient ? 10 : 5)
+        let base: Double = visible ? (efficient || lowPower ? 3 : (active ? 1 : 3)) : (lowPower || efficient ? 10 : (active ? 2 : 5))
         return failures > 0 ? max(base, min(30, pow(2, Double(min(5, failures))))) : base
     }
     public static func cpuPercent(previous: [UInt64]?, current: [UInt64]) -> Double? {

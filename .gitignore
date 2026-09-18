@@ -16,3 +16,6 @@ test-results/
 # Native build output
 macOS/.build/
 macOS/.swiftpm/
+
+# Also ignore linked development dependencies.
+/node_modules

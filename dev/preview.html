@@ -8,6 +8,9 @@ let state = params.get('state') || 'decode';
 window.setPreviewState = value => { state = value; };
 window.previewCopied = '';
 window.previewWrites = 0;
+window.previewComposed = null;
+window.previewUnexpectedSends = 0;
+let currentSession = params.has('chat') ? {id:'synthetic-chat',title:'Local coding session',busy:true,agent:'Build',model:'Qwen3.8-27B-4bit'} : null;
 const sessionItem = params.get('item') === 'session' ? {kind:'session', action:'open-omlx-scope', sessionId:'synthetic-session', sessionTitle:params.get('sessionTitle') || 'Synthetic session', directory:null} : null;
 let samples = 0;
 let previewEpoch = 1;
@@ -27,10 +30,11 @@ const tokens = {
   font: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', mono: 'ui-monospace, SFMono-Regular, Menlo, monospace', radius: '9px',
 };
 const post = (message) => frame.contentWindow.postMessage({channel:'openchamber.sdk',v:1,...message}, location.origin);
+window.setPreviewSession = value => { currentSession=value; post({type:'session',payload:{session:value}}); };
 window.addEventListener('message', (event) => {
   if(event.source !== frame.contentWindow || event.data?.channel !== 'openchamber.sdk') return;
   const m = event.data;
-if(m.type === 'hello') { post({type:'ready',payload:{theme:{mode:light?'light':'dark',tokens},locale:'en-US',directory:null,session:null,surface:params.get('surface') === 'page' ? 'page' : 'panel',connection:{connected:true,account:''},settings:{},item:sessionItem}}); return; }
+if(m.type === 'hello') { post({type:'ready',payload:{theme:{mode:light?'light':'dark',tokens},locale:'en-US',directory:null,session:currentSession,surface:params.get('surface') === 'page' ? 'page' : 'panel',connection:{connected:true,account:''},settings:{},item:sessionItem}}); return; }
   if(m.type === 'service-status') { post({type:'result',id:m.id,ok:true,payload:{status:'ready'}}); return; }
   if(m.type === 'storage') {
     const {op,key,value} = m.payload;
@@ -45,6 +49,12 @@ if(m.type === 'hello') { post({type:'ready',payload:{theme:{mode:light?'light':'
     window.previewCopied = m.payload.text;
     post({type:'result',id:m.id,ok:true,payload:null}); return;
   }
+  if(m.type === 'compose') {
+    if(params.get('compose') === 'fail') { post({type:'result',id:m.id,ok:false,code:'HOST_REJECTED',error:'Fixture compose failure'}); return; }
+    window.previewComposed = m.payload;
+    post({type:'result',id:m.id,ok:true,payload:null}); return;
+  }
+  if(m.type === 'prompt' || m.type === 'generate' || m.type === 'start-session') window.previewUnexpectedSends += 1;
   if(m.type !== 'service-request') return;
   window.previewRequests += 1;
   samples += 1;

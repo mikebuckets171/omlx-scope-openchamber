@@ -71,10 +71,16 @@ public enum Normalizer {
                 result.prompt = nonnegative(flight["prompt_tokens"])
                 result.reused = nonnegative(flight["cached_tokens"])
                 result.elapsed = nonnegative(flight["elapsed"])
-                if let total = nonnegative(flight["total"]), total > 0, let done = nonnegative(flight["processed"]) {
-                    result.progress = min(1, done / total)
+                if let total = nonnegative(flight["total"]), total > 0, total <= 9_007_199_254_740_991,
+                   let done = nonnegative(flight["processed"]), done <= total,
+                   done.rounded() == done, total.rounded() == total {
+                    result.progress = done / total
+                    result.prefillProcessed = done; result.prefillTotal = total
+                    result.prefillETA = nonnegative(flight["eta"])
                 }
-                result.message = "Reading context · reported prefill average"
+                result.progressStale = flight["progress_stale"] as? Bool == true
+                if result.progressStale { result.rate = nil; result.prefillETA = nil }
+                result.message = result.progressStale ? "Waiting for fresh prefill progress." : "Reading context · reported prefill average"
             } else if model["is_loading"] as? Bool == true || (result.active ?? 0) > 0 || !objects(model["activities"]).isEmpty {
                 result.phase = .processing; result.message = "Runtime is working. Token speed is not reported yet."
             } else if nonnegative(model["active_requests"]) == 0 {
