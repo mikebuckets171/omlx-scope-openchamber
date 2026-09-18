@@ -2,7 +2,9 @@ import AppKit
 import Foundation
 import Observation
 import Security
+#if SCOPE_SIGNED_UPDATES
 import Sparkle
+#endif
 import ScopeCore
 
 /// Sparkle is enabled only in configured Developer ID builds. Ad-hoc previews can
@@ -18,25 +20,44 @@ public final class UpdateController {
     public let installedVersion: ReleaseVersion?
     public private(set) var secureInstallation = false
     public var automaticallyChecks: Bool {
-        get { _ = updatePreferencesRevision; return secureInstallation ? controller?.updater.automaticallyChecksForUpdates ?? false : previewAutomaticChecks }
+        get {
+            _ = updatePreferencesRevision
+            #if SCOPE_SIGNED_UPDATES
+            if let controller { return controller.updater.automaticallyChecksForUpdates }
+            #endif
+            return previewAutomaticChecks
+        }
         set {
-            if secureInstallation { controller?.updater.automaticallyChecksForUpdates = newValue }
-            else {
-                previewAutomaticChecks = newValue
-                defaults.set(newValue, forKey: "updates.checkAutomatically")
-                scheduleChecks()
-            }
+            #if SCOPE_SIGNED_UPDATES
+            if let controller { controller.updater.automaticallyChecksForUpdates = newValue; return }
+            #endif
+            previewAutomaticChecks = newValue
+            defaults.set(newValue, forKey: "updates.checkAutomatically")
+            scheduleChecks()
         }
     }
     public var automaticallyInstalls: Bool {
-        get { _ = updatePreferencesRevision; return secureInstallation && (controller?.updater.automaticallyDownloadsUpdates ?? false) }
-        set { if secureInstallation { controller?.updater.automaticallyDownloadsUpdates = newValue } }
+        get {
+            _ = updatePreferencesRevision
+            #if SCOPE_SIGNED_UPDATES
+            return secureInstallation && (controller?.updater.automaticallyDownloadsUpdates ?? false)
+            #else
+            return false
+            #endif
+        }
+        set {
+            #if SCOPE_SIGNED_UPDATES
+            if secureInstallation { controller?.updater.automaticallyDownloadsUpdates = newValue }
+            #endif
+        }
     }
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let fetch: @Sendable () async throws -> MacRelease
+    #if SCOPE_SIGNED_UPDATES
     @ObservationIgnored private var controller: SPUStandardUpdaterController?
     @ObservationIgnored private var canCheckObservation: NSKeyValueObservation?
     @ObservationIgnored private var preferenceObservations: [NSKeyValueObservation] = []
+    #endif
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var schedule: Task<Void, Never>?
     @ObservationIgnored private var started = false
@@ -52,6 +73,7 @@ public final class UpdateController {
         lastChecked = defaults.object(forKey: "updates.lastChecked") as? Date
         lastAttempt = defaults.object(forKey: "updates.lastAttempt") as? Date
         previewAutomaticChecks = defaults.bool(forKey: "updates.checkAutomatically")
+        #if SCOPE_SIGNED_UPDATES
         if Self.isSignedUpdateBuild(Bundle.main) {
             let controller = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: nil, userDriverDelegate: nil)
             self.controller = controller
@@ -69,6 +91,7 @@ public final class UpdateController {
                 }
             ]
         }
+        #endif
     }
 
     init(version: String, defaults: UserDefaults, fetch: @escaping @Sendable () async throws -> MacRelease) {
@@ -90,8 +113,14 @@ public final class UpdateController {
 
     public func start() {
         guard !started else { return }; started = true
-        if let controller { controller.startUpdater(); controller.updater.clearFeedURLFromUserDefaults() }
-        else { scheduleChecks() }
+        #if SCOPE_SIGNED_UPDATES
+        if let controller {
+            controller.updater.clearFeedURLFromUserDefaults()
+            controller.startUpdater()
+            return
+        }
+        #endif
+        scheduleChecks()
     }
 
     public func stop() {
@@ -103,7 +132,9 @@ public final class UpdateController {
     public func check() {
         start()
         guard canCheck else { return }
+        #if SCOPE_SIGNED_UPDATES
         if let controller { controller.checkForUpdates(nil); return }
+        #endif
         guard task == nil else { return }
         guard installedVersion != nil else { state = .failed(ReleaseError.developmentBuild.localizedDescription); return }
         state = .checking; canCheck = false
@@ -145,12 +176,14 @@ public final class UpdateController {
     }
 
     static func isSignedUpdateBuild(_ bundle: Bundle) -> Bool {
+        #if SCOPE_SIGNED_UPDATES
         guard bundle.bundleIdentifier == "com.mikebuckets171.omlx-scope",
               bundle.object(forInfoDictionaryKey: "SUFeedURL") as? String == ReleaseCatalog.feedURL.absoluteString,
               let encoded = bundle.object(forInfoDictionaryKey: "SUPublicEDKey") as? String,
               Data(base64Encoded: encoded)?.count == 32,
               bundle.object(forInfoDictionaryKey: "SURequireSignedFeed") as? Bool == true,
-              bundle.object(forInfoDictionaryKey: "SUVerifyUpdateBeforeExtraction") as? Bool == true else { return false }
+              bundle.object(forInfoDictionaryKey: "SUVerifyUpdateBeforeExtraction") as? Bool == true,
+              bundle.object(forInfoDictionaryKey: "SUSignedFeedFailureExpirationInterval") as? Int == 0 else { return false }
         var code: SecStaticCode?
         guard SecStaticCodeCreateWithPath(bundle.bundleURL as CFURL, [], &code) == errSecSuccess,
               let code else { return false }
@@ -158,5 +191,8 @@ public final class UpdateController {
         let rule = #"anchor apple generic and certificate leaf[field.1.2.840.113635.100.6.1.13] exists"#
         guard SecRequirementCreateWithString(rule as CFString, [], &requirement) == errSecSuccess else { return false }
         return SecStaticCodeCheckValidity(code, SecCSFlags(rawValue: kSecCSStrictValidate), requirement) == errSecSuccess
+        #else
+        return false
+        #endif
     }
 }

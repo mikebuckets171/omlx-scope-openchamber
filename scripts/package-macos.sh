@@ -14,9 +14,9 @@ if [[ "$MODE" == developer-id ]]; then
 elif [[ "$MODE" != preview ]]; then
   echo 'SCOPE_DISTRIBUTION must be preview or developer-id.' >&2; exit 1
 fi
-swift build --package-path "$ROOT/macOS" -c "$CONFIGURATION" --product OMLXScope \
+SCOPE_DISTRIBUTION="$MODE" swift build --package-path "$ROOT/macOS" -c "$CONFIGURATION" --product OMLXScope \
   -Xlinker -rpath -Xlinker '@executable_path/../Frameworks'
-BIN="$(swift build --package-path "$ROOT/macOS" -c "$CONFIGURATION" --show-bin-path)"
+BIN="$(SCOPE_DISTRIBUTION="$MODE" swift build --package-path "$ROOT/macOS" -c "$CONFIGURATION" --show-bin-path)"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 APP="$STAGE/OMLX Scope.app"
@@ -24,13 +24,15 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Framewor
 cp "$BIN/OMLXScope" "$APP/Contents/MacOS/OMLXScope"
 cp "$ROOT/LICENSE" "$APP/Contents/Resources/LICENSE.txt"
 cp "$ROOT/THIRD_PARTY_NOTICES.md" "$APP/Contents/Resources/THIRD_PARTY_NOTICES.md"
-# This framework is the checksum-pinned, published Sparkle SPM binary.
-FRAMEWORK="$(find "$ROOT/macOS/.build/artifacts" -type d -name Sparkle.framework | head -1)"
-[[ -n "$FRAMEWORK" ]] || { echo 'The resolved Sparkle framework is missing.' >&2; exit 1; }
-/usr/bin/ditto "$FRAMEWORK" "$APP/Contents/Frameworks/Sparkle.framework"
-SPARKLE_LICENSE="$ROOT/macOS/.build/checkouts/Sparkle/LICENSE"
-[[ -f "$SPARKLE_LICENSE" ]] || { echo 'Sparkle license is missing.' >&2; exit 1; }
-cp "$SPARKLE_LICENSE" "$APP/Contents/Resources/Sparkle-LICENSE.txt"
+# Only Developer ID builds link and embed the checksum-pinned Sparkle binary.
+if [[ "$MODE" == developer-id ]]; then
+  FRAMEWORK="$(find "$ROOT/macOS/.build/artifacts" -type d -name Sparkle.framework | head -1)"
+  [[ -n "$FRAMEWORK" ]] || { echo 'The resolved Sparkle framework is missing.' >&2; exit 1; }
+  /usr/bin/ditto "$FRAMEWORK" "$APP/Contents/Frameworks/Sparkle.framework"
+  SPARKLE_LICENSE="$ROOT/macOS/.build/checkouts/Sparkle/LICENSE"
+  [[ -f "$SPARKLE_LICENSE" ]] || { echo 'Sparkle license is missing.' >&2; exit 1; }
+  cp "$SPARKLE_LICENSE" "$APP/Contents/Resources/Sparkle-LICENSE.txt"
+fi
 export VERSION MODE APP
 python3 - <<'PY'
 import base64,os,plistlib
@@ -43,9 +45,10 @@ p={
  'NSPrincipalClass':'NSApplication','CFBundleIconFile':'Scope','NSHighResolutionCapable':True,
  'NSAppTransportSecurity':{'NSAllowsLocalNetworking':True},
  # Keep update consent explicit; no profiling, HTML notes, or unsigned extraction.
- 'SUEnableAutomaticChecks':False, 'SUAutomaticallyUpdate':False,'SUSendProfileInfo':False,
+ 'SUEnableAutomaticChecks':False, 'SUAutomaticallyUpdate':False,'SUEnableSystemProfiling':False,
  'SUShowReleaseNotes':False, 'SUEnableJavaScript':False,
  'SURequireSignedFeed':True,'SUVerifyUpdateBeforeExtraction':True,'SUScheduledCheckInterval':86400,
+ 'SUSignedFeedFailureExpirationInterval':0,
 }
 if os.environ['MODE']=='developer-id':
  key=os.environ['SPARKLE_PUBLIC_KEY']
@@ -58,13 +61,19 @@ swift "$ROOT/scripts/macos-icon.swift" "$STAGE/Scope.iconset"
 SIGN_ARGS=(--force --sign "$IDENTITY" --options runtime)
 if [[ "$MODE" == developer-id ]]; then SIGN_ARGS+=(--timestamp); else SIGN_ARGS+=(--timestamp=none); fi
 # Sign nested code inside-out. No --deep signing or library-validation exceptions.
-FW="$APP/Contents/Frameworks/Sparkle.framework"
-while IFS= read -r -d '' TOOL; do /usr/bin/codesign "${SIGN_ARGS[@]}" "$TOOL"; done < <(find "$FW" -type f -name Autoupdate -print0)
-while IFS= read -r -d '' BUNDLE; do /usr/bin/codesign "${SIGN_ARGS[@]}" "$BUNDLE"; done < <(find "$FW" -depth -type d \( -name '*.xpc' -o -name '*.app' \) -print0)
-/usr/bin/codesign "${SIGN_ARGS[@]}" "$FW"
+if [[ "$MODE" == developer-id ]]; then
+  FW="$APP/Contents/Frameworks/Sparkle.framework"
+  while IFS= read -r -d '' TOOL; do /usr/bin/codesign "${SIGN_ARGS[@]}" "$TOOL"; done < <(find "$FW" -type f -name Autoupdate -print0)
+  while IFS= read -r -d '' BUNDLE; do /usr/bin/codesign "${SIGN_ARGS[@]}" "$BUNDLE"; done < <(find "$FW" -depth -type d \( -name '*.xpc' -o -name '*.app' \) -print0)
+  /usr/bin/codesign "${SIGN_ARGS[@]}" "$FW"
+fi
 /usr/bin/codesign "${SIGN_ARGS[@]}" "$APP"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP"
 /usr/bin/plutil -lint "$APP/Contents/Info.plist"
+/usr/bin/codesign --display --verbose=4 "$APP" 2>&1 | grep -q 'flags=.*runtime' || { echo 'Hardened runtime is missing.' >&2; exit 1; }
+if [[ "$MODE" == preview ]] && /usr/bin/otool -L "$APP/Contents/MacOS/OMLXScope" | grep -q Sparkle; then
+  echo 'Preview build unexpectedly links the signed updater.' >&2; exit 1
+fi
 if /usr/bin/otool -L "$APP/Contents/MacOS/OMLXScope" | grep -E '/(opt/homebrew|Users|usr/local)/'; then
   echo 'Unexpected build-machine library dependency.' >&2; exit 1
 fi
@@ -73,7 +82,7 @@ SIZE="$(stat -f %z "$APP/Contents/MacOS/OMLXScope")"
 rm -rf "$ROOT/dist/OMLX Scope.app"
 /usr/bin/ditto "$APP" "$ROOT/dist/OMLX Scope.app"
 /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP" "$ROOT/dist/OMLX-Scope-macOS-$VERSION.zip"
-echo "PASS: native app $VERSION; executable $SIZE bytes; Sparkle 2.10.0 embedded."
+echo "PASS: native app $VERSION; executable $SIZE bytes; distribution $MODE."
 if [[ "$MODE" == preview ]]; then
   echo 'Distribution: hardened, ad-hoc preview. Not notarized. Automatic installation disabled.'
 else

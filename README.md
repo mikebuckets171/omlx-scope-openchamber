@@ -15,7 +15,10 @@ progress, token speed, cache reuse, and your Mac’s resources. It complements
 oMLX’s dashboard rather than replacing it.
 
 <!-- Product screenshots use synthetic readings, never a performance claim. -->
-![OMLX Scope in an OpenChamber theme](docs/images/extension.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/mikebuckets171/omlx-scope-openchamber/releases/download/v0.5.6/extension-dark.png">
+  <img alt="OMLX Scope full-page monitor" src="https://github.com/mikebuckets171/omlx-scope-openchamber/releases/download/v0.5.6/extension-light.png">
+</picture>
 
 *Full-page extension view with sample data. The panel follows OpenChamber’s theme.*
 
@@ -72,8 +75,8 @@ builds. See the [Mac guide](macOS/README.md) and
 The extension uses vanilla TypeScript, the OpenChamber SDK, and existing oMLX
 monitoring responses. Its reviewed extracted-package allowance is **224 KiB**.
 Histories and captures are bounded, updates slow when idle, and hidden extension
-views stop polling. The native app uses SwiftUI and Sparkle for signed updates;
-it does not embed a browser or Node runtime.
+views stop polling. The native app uses SwiftUI; only Developer ID builds include Sparkle for signed
+updates. Preview builds have no installer framework, browser, or Node runtime.
 
 The app and extension are independent clients. Running both can produce two sets
 of oMLX monitoring requests. Download size is not a measurement of runtime

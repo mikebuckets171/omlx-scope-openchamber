@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 public struct UpdatesView: View {
@@ -47,7 +48,7 @@ public struct CheckForUpdatesButton: View {
     public init(updates: UpdateController) { self.updates = updates }
     public var body: some View {
         Button("Check for Updates…") {
-            if !updates.secureInstallation { openWindow(id: "updates") }
+            if !updates.secureInstallation { openWindow(id: "updates"); NSApp.activate(ignoringOtherApps: true) }
             updates.check()
         }.disabled(!updates.canCheck)
     }

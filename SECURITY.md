@@ -12,10 +12,11 @@ in the private report. Only the latest published version receives fixes.
 
 ## Security boundaries
 
-- Runtime connections are loopback-only, authenticated, bounded, and read-only.
+- Runtime monitoring is loopback-only, bounded, and read-only. Dashboard reads
+  use the local oMLX login; health identification happens before credentials are sent.
   Redirects are rejected before credentials can be forwarded.
-- Extension permissions declare the narrow configuration reads and fixed macOS
-  diagnostic commands. The service requires a host-provided token on every route.
+- Configuration discovery reads documented local paths; the manifest requests
+  only the two fixed macOS diagnostic commands. The service requires a host-provided token on every route.
 - Sharing is an explicit user action and cannot send a chat message. Display and
   report contracts exclude credentials and raw request content.
 - Mac update discovery uses an independent HTTPS session and validates the
@@ -33,7 +34,8 @@ The production path requires a Developer ID Application identity, hardened
 runtime, notarization, stapling, and successful platform assessment. Signed
 updates additionally require an Ed25519 public key in the app and signed update
 archives and feeds. Sparkle is pinned and its binary checksum is verified by
-SwiftPM. Automatic installation stays disabled in unconfigured preview builds.
+SwiftPM. Automatic installation is compiled out of preview builds. Feed-signature
+failures do not expire in the signed build policy.
 
 See [Release process](docs/RELEASING.md). Signing/notarization reduce distribution
 risk; they do not prove the absence of vulnerabilities. Automated fixture tests

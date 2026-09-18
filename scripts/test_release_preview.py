@@ -34,6 +34,7 @@ class ReleaseValidationTests(unittest.TestCase):
             "CFBundleVersion": "0.5.6", "CFBundleShortVersionString": "0.5.6",
             "LSMinimumSystemVersion": "14.0", "SURequireSignedFeed": True,
             "SUVerifyUpdateBeforeExtraction": True,
+            "SUSignedFeedFailureExpirationInterval": 0, "SUEnableSystemProfiling": False,
         }
         info.update(overrides)
         archive = root / "native.zip"
@@ -41,8 +42,6 @@ class ReleaseValidationTests(unittest.TestCase):
         with zipfile.ZipFile(archive, "w") as output:
             output.writestr(prefix + "Info.plist", plistlib.dumps(info))
             output.writestr(prefix + "MacOS/OMLXScope", bytes.fromhex("cffaedfe") + struct.pack("<I", 0x0100000C))
-            output.writestr(prefix + "Frameworks/Sparkle.framework/Versions/B/Sparkle", b"fixture")
-            output.writestr(prefix + "Resources/Sparkle-LICENSE.txt", b"fixture")
         return archive
 
     def test_native_rejects_wrong_version_or_missing_verification(self):

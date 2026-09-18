@@ -65,8 +65,9 @@ def validate_native(path: Path, version: str) -> None:
         binary = archive.read(prefix + "MacOS/OMLXScope")
         require(binary[:4] == bytes.fromhex("cffaedfe") and struct.unpack("<I", binary[4:8])[0] == 0x0100000C, "Expected ARM64 executable")
         require(len(binary) < 8_000_000, "Executable size budget exceeded")
-        require(any(name.endswith("Sparkle.framework/Versions/B/Sparkle") for name in names), "Missing update framework")
-        require(prefix + "Resources/Sparkle-LICENSE.txt" in names, "Missing third-party license")
+        require(not any("Sparkle.framework/" in name for name in names), "Preview must not embed the signed updater")
+        require(info.get("SUSignedFeedFailureExpirationInterval") == 0, "Signed-feed validation must not expire")
+        require(info.get("SUEnableSystemProfiling") is False, "System profiling must be disabled")
         require(not any("node_modules" in name or "ScopePreview" in name for name in names), "Development-only files in native archive")
 
 
@@ -118,7 +119,7 @@ def main() -> None:
     notes = release_notes((root / "CHANGELOG.md").read_text(), version)
     with tempfile.TemporaryDirectory(prefix="scope-release-") as folder:
         work = Path(folder)
-        for name in ["omlx-scope-package", "native-macos"]:
+        for name in ["omlx-scope-package", "native-macos", "browser-evidence"]:
             gh("run", "download", run_id, "--repo", REPO, "--name", name, "--dir", str(work / name))
         packages = []
         for name in [f"omlx-scope-openchamber-{version}.zip", f"OMLX-Scope-macOS-{version}.zip"]:
@@ -129,7 +130,18 @@ def main() -> None:
         validate_native(packages[1], version)
         checksums = work / "SHA256SUMS"
         checksums.write_text("".join(digest(path).removeprefix("sha256:") + "  " + path.name + "\n" for path in packages))
-        assets = packages + [checksums]
+        screenshots = []
+        for theme in ["dark", "light"]:
+            candidates = [item for item in (work / "browser-evidence").rglob(f"coordinated-{theme}-1160.png") if item.parent.name.endswith("-chromium")]
+            require(len(candidates) == 1, f"Expected one reviewed {theme} screenshot")
+            data = candidates[0].read_bytes()
+            require(data.startswith(b"\x89PNG\r\n\x1a\n") and len(data) <= 3_000_000, "Invalid screenshot")
+            width, height = struct.unpack(">II", data[16:24])
+            require(800 <= width <= 2400 and 600 <= height <= 6000, "Unexpected screenshot dimensions")
+            target = work / f"extension-{theme}.png"
+            target.write_bytes(data)
+            screenshots.append(target)
+        assets = packages + [checksums] + screenshots
         refs = api(f"git/matching-refs/tags/{tag}")
         ref = next((value for value in refs if value["ref"] == "refs/tags/" + tag), None)
         if ref:
@@ -148,7 +160,7 @@ def main() -> None:
             if found:
                 require(found.get("digest") == digest(path) and found["size"] == path.stat().st_size, "Existing asset differs; do not overwrite")
             else:
-                subprocess.run(["gh", "api", "--method", "POST", f"https://uploads.github.com/repos/{REPO}/releases/{release_id}/assets?name={path.name}", "-H", "Content-Type: " + ("application/zip" if path.suffix == ".zip" else "text/plain"), "--input", str(path)], check=True, stdout=subprocess.DEVNULL)
+                subprocess.run(["gh", "api", "--method", "POST", f"https://uploads.github.com/repos/{REPO}/releases/{release_id}/assets?name={path.name}", "-H", "Content-Type: " + ("application/zip" if path.suffix == ".zip" else "image/png" if path.suffix == ".png" else "text/plain"), "--input", str(path)], check=True, stdout=subprocess.DEVNULL)
         final_assets = api(f"releases/{release_id}")["assets"]
         require({asset["name"] for asset in final_assets} == {path.name for path in assets}, "Unexpected release assets")
         for path in assets:

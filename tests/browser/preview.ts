@@ -340,7 +340,7 @@ test('copy recent handles denied clipboard without claiming success', async ({ p
   await expect(frame.locator('#action-status')).toContainText('Could not copy observations');
 });
 
-test('sharing is a quiet SDK menu and appends a sanitized draft without sending', async ({page}) => {
+test('sharing is a quiet menu built with SDK buttons and appends a sanitized draft without sending', async ({page}) => {
   const frame = await openPanel(page, 'chat=1');
   await expect(frame.locator('#chamber-context')).toHaveCount(0);
   const share = frame.getByRole('button', {name:'Share', exact:true});
@@ -354,19 +354,19 @@ test('sharing is a quiet SDK menu and appends a sanitized draft without sending'
   expect(await page.evaluate(() => (window as any).previewUnexpectedSends)).toBe(0);
   await page.evaluate(() => (window as any).setPreviewSession(null));
   await share.click();
-  await expect(frame.getByRole('menuitem', {name:'Add to chat draft'})).toHaveAttribute('aria-disabled','true');
+  await expect(frame.getByRole('menuitem', {name:'Add to chat draft'})).toBeDisabled();
 });
 
 test('draft failures do not claim success; sharing without a selected chat is unavailable', async ({page}) => {
   let frame = await openPanel(page);
   await frame.getByRole('button', {name:'Share',exact:true}).click();
-  await expect(frame.getByRole('menuitem',{name:'Add to chat draft'})).toHaveAttribute('aria-disabled','true');
+  await expect(frame.getByRole('menuitem',{name:'Add to chat draft'})).toBeDisabled();
   frame = await openPanel(page,'chat=1&compose=fail');
   await frame.getByRole('button',{name:'Share',exact:true}).click();
   await frame.getByRole('menuitem',{name:'Add to chat draft'}).click();
   await expect(frame.locator('#action-status')).toContainText('Could not confirm');
   await frame.getByRole('button',{name:'Share',exact:true}).click();
-  await expect(frame.getByRole('menuitem',{name:'Add to chat draft'})).not.toHaveAttribute('aria-disabled','true');
+  await expect(frame.getByRole('menuitem',{name:'Add to chat draft'})).toBeEnabled();
 });
 
 test('performance capture observes, pins, copies, and clears without running inference',async({page})=>{
@@ -409,7 +409,8 @@ test('coordinated monitor layout keeps new controls legible with prefill visible
     await frame.locator('#capture-pin').click();
     await page.evaluate(()=>(window as any).setPreviewState('prefill'));await frame.locator('#refresh').click();
     await expect(frame.locator('#prefill-remaining')).toHaveText('36% remaining');
-    await expect(frame.locator('#chamber-session')).toBeVisible();
+    await expect(frame.getByRole('button', {name:'Share',exact:true})).toBeVisible();
+    await expect(frame.locator('#chamber-context')).toHaveCount(0);
     expect(await frame.locator('main').evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
     const height=await frame.locator('main').evaluate(el=>Math.ceil(el.getBoundingClientRect().height)+40);
     await page.setViewportSize({width,height});
@@ -432,7 +433,7 @@ test('Share preserves keyboard focus, responds to session changes, and survives 
   await expect(frame.getByRole('menu')).toHaveCount(0);
   await page.evaluate(() => (window as any).setPreviewSession(null));
   await share.press('Enter');
-  await expect(frame.getByRole('menuitem',{name:'Add to chat draft'})).toHaveAttribute('aria-disabled','true');
+  await expect(frame.getByRole('menuitem',{name:'Add to chat draft'})).toBeDisabled();
   expect(await page.evaluate(() => (window as any).previewComposed)).toBeNull();
 });
 
@@ -460,4 +461,28 @@ test('live host theme changes update the existing view without restarting monito
   await expect(frame.getByRole('menuitem',{name:'Add to chat draft'})).toBeVisible();
   expect(await frame.locator('main').evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
   await frame.locator('main').screenshot({path:info.outputPath('share-compact-sand.png')});
+});
+
+
+test('Share remains anchored, closes outside, and does not shift the monitor', async ({ page }, info) => {
+  await page.setViewportSize({width:320,height:1200});
+  const frame = await openPanel(page,'chat=1&state=prefill');
+  const share = frame.getByRole('button',{name:'Share',exact:true});
+  const before = await frame.locator('#model').boundingBox();
+  await share.click();
+  const menu = frame.getByRole('menu');
+  await expect(menu).toBeVisible();
+  expect(await frame.locator('#model').boundingBox()).toEqual(before);
+  const bounds = await menu.boundingBox();
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(320);
+  await frame.getByRole('menuitem',{name:'Copy stats',exact:true}).press('ArrowDown');
+  await expect(frame.getByRole('menuitem',{name:'Add to chat draft'})).toBeFocused();
+  await frame.getByRole('menuitem',{name:'Add to chat draft'}).press('Home');
+  await expect(frame.getByRole('menuitem',{name:'Copy stats',exact:true})).toBeFocused();
+  await frame.locator('main').screenshot({path:info.outputPath('share-narrow.png')});
+  await frame.locator('#model').click();
+  await expect(menu).toBeHidden();
+  expect(await page.evaluate(() => (window as any).previewComposed)).toBeNull();
+  expect(await page.evaluate(() => (window as any).previewCopied)).toBe('');
 });

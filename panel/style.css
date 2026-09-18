@@ -251,7 +251,7 @@ select:focus-visible { outline:2px solid var(--scope-accent); outline-offset:4px
 @media (max-width:370px) { .scope[data-phase="prefill"] #prefill-remaining { font-size:26px; } }
 
 /* Shared host chrome; sharing never occupies a monitoring card. */
-.share-actions { flex:none; }
+.share-actions { position:relative; flex:none; z-index:20; }
 .share-actions button { min-height:29px; font:11px var(--oc-font,sans-serif); }
 .view-tools { padding-bottom:15px; border-bottom:1px solid var(--scope-line); }
 .view-tools > button { min-height:29px; padding-inline:9px; font-size:11px; border-radius:var(--oc-radius,9px); }
@@ -267,3 +267,9 @@ select:focus-visible { outline:2px solid var(--scope-accent); outline-offset:4px
 button, summary { transition:color 120ms ease, background-color 120ms ease, border-color 120ms ease; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition:none !important; animation:none !important; } }
 @media (forced-colors: active) { .progress-track span, .meter i { background:Highlight; } #trace path { stroke:Highlight; } }
+
+/* A view-owned disclosure using SDK buttons, with no host DOM dependency. */
+.share-menu { position:absolute; inset:calc(100% + 8px) 0 auto auto; width:210px; max-width:calc(100vw - 32px); padding:5px; border:1px solid var(--oc-border,var(--scope-line)); border-radius:var(--oc-radius,9px); background:var(--oc-elevated,var(--oc-bg)); color:var(--oc-fg); box-shadow:0 8px 24px #0002; }
+.share-menu .oc-sdk-btn { width:100%; justify-content:flex-start; min-height:34px; padding:7px 10px; text-align:left; }
+.share-actions > .oc-sdk-btn[aria-expanded="true"] { background:var(--oc-hover,var(--scope-surface)); }
+.share-menu .oc-sdk-btn:focus-visible { outline-offset:-2px; }

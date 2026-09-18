@@ -8,8 +8,8 @@ main commit: macOS/Linux checks, extracted-package startup, browser tests, nativ
 builds, and bundle validation. The release workflow publishes only those tested
 artifacts, verifies uploaded checksums, and uses an annotated version tag.
 
-A native **preview** is ad-hoc signed with hardened runtime and has automatic
-installation disabled. It may check public GitHub releases, but it cannot replace
+A native **preview** is ad-hoc signed with hardened runtime and does not link or
+embed Sparkle. Automatic installation is compiled out. It may check public GitHub releases, but it cannot replace
 its executable. Preview publication must stop when the signed update feed is
 introduced. The publisher then follows the signed release path below.
 
@@ -34,6 +34,8 @@ The Apple identity and Sparkle update key serve different purposes. An ad-hoc
 signature cannot replace Developer ID; a SHA-256 checksum cannot replace a
 trusted update signature. Do not rotate the update key without following
 Sparkle's key-rotation guidance and testing the old-to-new transition.
+Feed-signature failures are configured not to expire. Losing the update key
+therefore requires a deliberate, tested recovery release—not a verification bypass.
 
 ## Produce a signed release
 
@@ -80,4 +82,4 @@ Gatekeeper, weaken library validation, or substitute a custom shell updater.
 - [Apple Developer ID](https://developer.apple.com/developer-id/)
 - [Apple notarization](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)
 - [Sparkle publishing](https://sparkle-project.org/documentation/publishing/)
-- [Sparkle security](https://sparkle-project.org/documentation/security/)
+- [Sparkle security options](https://sparkle-project.org/documentation/customization/#security-settings)

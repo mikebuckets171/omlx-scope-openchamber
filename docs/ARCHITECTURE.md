@@ -7,7 +7,8 @@ geometry rather than replacing interactive controls. `panel/` contains small
 modules for progress, bounded histories, performance captures, sharing, and
 preferences. `applyHostReady` applies the host’s current theme on every SDK ready
 snapshot; semantic theme tokens distinguish accent fills from readable text.
-The Share menu is an SDK component with keyboard handling.
+The Share disclosure uses SDK buttons with view-local focus and keyboard handling.
+It does not inspect or modify the parent application’s DOM.
 
 The host-managed Node service exposes authenticated health and snapshot routes.
 `service/omlx-client.ts` shares in-flight collection and caches supplemental
@@ -38,9 +39,10 @@ IOPowerSources APIs supply host readings. New API keys use Keychain; non-secret
 preferences use UserDefaults. The app and extension do not share a hidden IPC
 bridge and never modify each other.
 
-Update traffic has a separate ephemeral HTTPS session. Preview builds discover
+Update traffic has a separate ephemeral HTTPS session. Preview builds do not link
+or embed an installer framework. They discover
 stable, native GitHub releases but do not install executable updates. Configured
-Developer ID builds use pinned Sparkle 2.10.0 with archive and feed signatures,
+Developer ID builds use pinned Sparkle 2.10.0 with archive and non-expiring feed-signature validation,
 verification before extraction, explicit user preferences, and no system-profile
 reporting. Sparkle’s short-lived installation components are part of its standard
 framework; there is no project-specific updater daemon.

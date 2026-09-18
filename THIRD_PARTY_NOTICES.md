@@ -44,7 +44,8 @@ The full MIT license text for these dependencies is reproduced below:
 
 Sparkle 2.10.0 provides the standard signed-update mechanism. It is pinned to an
 exact release in SwiftPM; that release’s manifest pins its binary SHA-256.
-The complete upstream license and bundled-component notices are copied into
+Sparkle is not linked or embedded in preview builds. In Developer ID builds,
+the complete upstream license and bundled-component notices are copied into
 `OMLX Scope.app/Contents/Resources/Sparkle-LICENSE.txt` during packaging.
 
 Source and license: https://github.com/sparkle-project/Sparkle/tree/2.10.0
