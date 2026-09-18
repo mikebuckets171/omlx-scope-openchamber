@@ -11,6 +11,11 @@ and CPU load without leaving your workspace.
 
 ## Features
 
+- **Prefill remaining:** a visible percentage and processed/total token counts for
+  the current runtime stage. Missing and stale progress are labelled, never guessed.
+- **Chat-friendly controls:** a compact view, saved energy-saving preference, and
+  a Copy stats action that excludes credentials, chat text, model names, and paths.
+
 - **Inference activity:** request phase, reported token speed, context usage,
   prefix reuse, and a 90-second history.
 - **Mac resources:** CPU load, memory occupancy, wired and compressed memory,
@@ -24,6 +29,8 @@ No analytics, cloud backend, external fonts, or third-party charting framework.
 The leaf button reduces extension refresh frequency without pausing inference.
 
 ## Mac app
+
+The native companion remains at **0.5.2**; **0.5.3 is an extension-only update**.
 
 The native Mac companion provides a monitoring window and menu-bar popover,
 with selectable token-speed, CPU, memory, or icon-only readouts. It uses SwiftUI

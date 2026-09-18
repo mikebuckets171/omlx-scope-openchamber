@@ -129,3 +129,79 @@ test('energy-saving control reduces repeated polling without pausing the model',
   await expect.poll(() => requests(page)).toBeGreaterThan(before);
   await expect(frame.locator('#connection')).toHaveText('oMLX connected');
 });
+
+
+test('prefill remaining and counts stay visible in compact mode and clear on generation', async ({ page }, info) => {
+  for (const theme of ['dark', 'light']) {
+    await page.setViewportSize({ width: 430, height: 1000 });
+    const frame = await openPanel(page, `theme=${theme}&state=prefill`);
+    await expect(frame.locator('#prefill-remaining')).toHaveText('36% remaining');
+    await expect(frame.locator('#prefill-counts')).toContainText('5,824 / 9,100');
+    await expect(frame.locator('#prefill-track')).toHaveAttribute('aria-valuetext', /36% remaining/);
+    await frame.locator('#compact').click();
+    await expect(frame.locator('#signal')).toBeHidden();
+    await expect(frame.locator('#prefill-remaining')).toBeVisible();
+    await page.screenshot({ path: info.outputPath(`prefill-${theme}.png`), fullPage: true });
+    await frame.locator('#pause').click();
+    await expect(frame.locator('#prefill-state')).toHaveText('Paused · last reading');
+    await frame.locator('#pause').click();
+    await page.evaluate(() => (window as unknown as { setPreviewState: (state: string) => void }).setPreviewState('decode'));
+    await frame.locator('#refresh').click();
+    await expect(frame.locator('#prefill-progress')).toBeHidden();
+    await expect(frame.locator('#request-output')).toContainText('output tokens');
+    await page.evaluate(() => sessionStorage.clear());
+  }
+});
+
+test('invalid or missing prefill counts are not zero; stale progress is labelled', async ({ page }) => {
+  for (const state of ['prefill-missing', 'prefill-malformed', 'prefill-stale']) {
+    const frame = await openPanel(page, `state=${state}`);
+    if (state === 'prefill-stale') {
+      await expect(frame.locator('#prefill-state')).toHaveText('Waiting for progress');
+      await expect(frame.locator('#prefill-track')).toHaveAttribute('aria-valuetext', /not live/);
+    } else {
+      await expect(frame.locator('#prefill-remaining')).toHaveText('Progress unavailable');
+      await expect(frame.locator('#prefill-track')).not.toHaveAttribute('aria-valuenow');
+    }
+  }
+});
+
+test('view choices survive reload with no repeated storage writes or extra polling', async ({ page }) => {
+  let frame = await openPanel(page, 'state=prefill');
+  await frame.locator('#compact').click(); await frame.locator('#efficiency').click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { previewWrites: number }).previewWrites)).toBe(2);
+  await page.reload(); frame = page.frameLocator('iframe');
+  await expect(frame.locator('#compact')).toHaveAttribute('aria-pressed', 'true');
+  await expect(frame.locator('#efficiency')).toHaveAttribute('aria-pressed', 'true');
+  await expect(frame.locator('#prefill-remaining')).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { previewWrites: number }).previewWrites)).toBe(0);
+});
+
+test('copy stats uses host clipboard and reports failure without claiming success', async ({ page }) => {
+  let frame = await openPanel(page, 'state=prefill&long=1&sessionTitle=PRIVATE');
+  const before = await requests(page);
+  await frame.locator('#pause').click(); await frame.locator('#copy-stats').click();
+  await expect(frame.locator('#action-status')).toContainText('Readings copied');
+  const copied = await page.evaluate(() => (window as unknown as { previewCopied: string }).previewCopied);
+  expect(copied).toContain('36% remaining'); expect(copied).toContain('held observations');
+  expect(copied).not.toMatch(/PRIVATE|publisher|request_id|api_key/);
+  expect(await requests(page)).toBe(before);
+  frame = await openPanel(page, 'clipboard=fail');
+  await frame.locator('#copy-stats').click();
+  await expect(frame.locator('#action-status')).toContainText('Could not copy');
+});
+
+test('storage failures never block monitoring or claim persisted preferences', async ({ page }) => {
+  const frame = await openPanel(page, 'storage=fail');
+  await frame.locator('#compact').click();
+  await expect(frame.locator('#compact')).toHaveAttribute('aria-pressed', 'true');
+  await expect(frame.locator('#action-status')).toContainText('could not save');
+  await expect(frame.locator('#connection')).toHaveText('oMLX connected');
+});
+
+test('energy saving does not turn the throughput chart into disconnected invisible points', async ({ page }) => {
+  const frame = await openPanel(page);
+  await frame.locator('#efficiency').click();
+  await expect(frame.locator('#trace')).toContainText('');
+  await expect.poll(() => frame.locator('#trace path').evaluateAll(paths => paths.some(path => /L/.test(path.getAttribute('d') ?? ''))), { timeout: 9000 }).toBe(true);
+});

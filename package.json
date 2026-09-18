@@ -1,6 +1,6 @@
 {
   "name": "omlx-scope-openchamber",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "A lightweight oMLX and Mac resource monitor for OpenChamber",
   "private": true,
   "license": "MIT",
@@ -60,7 +60,7 @@
   "scripts": {
     "build": "bun run build:panel && bun run build:service",
     "build:panel": "openchamber-guest-bundle panel/main.ts panel/main.js",
-    "build:service": "openchamber-guest-bundle --node service/main.ts service/main.js",
+    "build:service": "bun build service/main.ts --target=node --format=esm --minify-whitespace --outfile=service/main.js",
     "type-check": "tsc --noEmit",
     "test": "bun test ./service ./src ./panel",
     "preview": "bun run build:panel && bun dev/server.ts",

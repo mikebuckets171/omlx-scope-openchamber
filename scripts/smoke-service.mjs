@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
+import { createServer as createHTTPServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -13,8 +14,9 @@ const root = resolve(process.argv[2]);
 const home = await mkdtemp(join(tmpdir(), 'omlx-scope-smoke-'));
 const token = randomBytes(24).toString('hex');
 const children = [];
+let mockRuntime = null;
 
-function start(port) {
+function start(port, overrides = {}) {
   const child = spawn(process.execPath, [join(root, 'service/main.js')], {
     cwd: root,
     // Never inherit credentials, NODE_PATH, NODE_OPTIONS or the real home.
@@ -23,6 +25,7 @@ function start(port) {
       XDG_CONFIG_HOME: join(home, '.config'), XDG_DATA_HOME: join(home, '.local/share'),
       TMPDIR: home, TMP: home, TEMP: home,
       OPENCHAMBER_SERVICE_PORT: String(port), OPENCHAMBER_SERVICE_TOKEN: token,
+      ...overrides,
     },
     stdio: ['ignore', 'ignore', 'pipe'],
   });
@@ -108,8 +111,46 @@ try {
   assert(!collision.log.includes(token), 'Startup diagnostics exposed the service token.');
   await stop(service);
   assert.equal(service.result.code, 0, 'Service did not stop cleanly.');
+  // Exercise real HTTP collection through the extracted, minified Node bundle.
+  let flight = { request_id: 'private-smoke-request', processed: 64, total: 100, speed: 184 };
+  mockRuntime = createHTTPServer((request, response) => {
+    const path = new URL(request.url, 'http://127.0.0.1').pathname;
+    let body;
+    if (path === '/health') body = { status: 'healthy', engine_pool: { model_count: 1 } };
+    else if (path === '/admin/api/login') {
+      response.setHeader('Set-Cookie', 'omlx_admin_session=smoke; HttpOnly'); body = {};
+    } else if (path === '/v1/models/status') body = { models: [] };
+    else if (path === '/admin/api/activity' || path === '/admin/api/stats') {
+      body = { engines: {}, active_models: { models: [{ id: 'fixture', active_requests: 1, prefilling: [flight] }] } };
+    } else { response.writeHead(404); response.end(); return; }
+    response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify(body));
+  });
+  await new Promise((resolveListen, reject) => { mockRuntime.once('error', reject); mockRuntime.listen(0, '127.0.0.1', resolveListen); });
+  const activeService = start(port, { OMLX_SCOPE_BASE_URL: `http://127.0.0.1:${mockRuntime.address().port}`, OMLX_SCOPE_API_KEY: 'isolated-smoke-key' });
+  let ready = false;
+  const nextDeadline = performance.now() + 5000;
+  while (performance.now() < nextDeadline && !activeService.closed) {
+    try { ready = (await get('/health')).status === 200; if (ready) break; } catch {}
+    await delay(50);
+  }
+  assert(ready, `Packaged service did not restart: ${activeService.log}`);
+  const activeSnapshot = await (await get('/snapshot')).json();
+  assert.equal(activeSnapshot.available, true);
+  assert.equal(activeSnapshot.prefillProgress, 0.64);
+  assert.equal(activeSnapshot.prefillProcessedTokens, 64);
+  assert.equal(activeSnapshot.prefillTotalTokens, 100);
+  assert.equal(activeSnapshot.prefillProgressStale, false);
+  assert(!JSON.stringify(activeSnapshot).includes('private-smoke-request'));
+  assert(!JSON.stringify(activeSnapshot).includes('isolated-smoke-key'));
+  flight = { ...flight, processed: 101 };
+  await delay(550);
+  const invalid = await (await get('/snapshot')).json();
+  assert.equal(invalid.prefillProgress, null, 'Malformed progress must not become 100% complete.');
+  await stop(activeService);
+  console.log('PASS: packaged prefill counters and invalid-progress rejection verified against loopback fixture.');
   console.log('PASS: packaged Node service starts without node_modules; /health, /snapshot, JSONC, authentication, startup errors, and shutdown verified.');
 } finally {
   await Promise.all(children.map(stop));
+  if (mockRuntime) { mockRuntime.closeAllConnections(); await new Promise(resolveClose => mockRuntime.close(resolveClose)); }
   await rm(home, { recursive: true, force: true });
 }

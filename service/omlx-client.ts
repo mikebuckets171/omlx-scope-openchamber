@@ -335,7 +335,7 @@ export class OmlxClient {
         for (const entry of Array.isArray(model[kind]) ? model[kind] : []) {
           const flight = asObject(entry);
           if (!flight) continue;
-          const identity = JSON.stringify([model.id, kind, flight.request_id]);
+          const identity = JSON.stringify([model.id, kind, flight.request_id, kind === 'prefilling' ? [flight.phase, flight.total] : null]);
           identities.push(identity);
           if (kind !== 'prefilling') continue;
           activePrefills.add(identity);
