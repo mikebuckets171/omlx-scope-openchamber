@@ -64,8 +64,10 @@ bash scripts/package-macos.sh
 ./script/build_and_run.sh --verify
 ```
 
-The package pins Sparkle 2.10.0. Packaging embeds its framework and full license,
-signs nested code inside-out, and validates the bundle and dynamic-library paths.
+Preview builds have no third-party Swift dependency or installer framework.
+Developer ID builds pin Sparkle 2.10.0, embed its framework and full license, and
+sign nested code inside-out. Both modes validate bundle integrity, hardened
+runtime, and dynamic-library paths. CI compiles and tests both configurations.
 `ScopePreview` is a separate developer executable, not part of the shipped app.
 
 CI builds, tests, launches, and renders fixtures on macOS ARM64. Live oMLX use,

@@ -43,6 +43,26 @@ final class UpdateTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(100))
         let calls = await fixture.calls; XCTAssertEqual(calls, 0)
     }
+    @MainActor func testAutomaticChecksRespectOptInAndDailyInterval() async throws {
+        let fixture = ReleaseFixture()
+        let defaults = UserDefaults(suiteName: UUID().uuidString)!
+        let updates = UpdateController(version: "0.5.6", defaults: defaults, fetch: { try await fixture.fetch() })
+        defer { updates.stop() }
+        updates.start()
+        updates.automaticallyChecks = true
+        try await Task.sleep(for: .milliseconds(200))
+        let first = await fixture.calls
+        XCTAssertEqual(first, 1)
+        XCTAssertTrue(defaults.bool(forKey: "updates.checkAutomatically"))
+        updates.automaticallyChecks = false
+        updates.automaticallyChecks = true
+        try await Task.sleep(for: .milliseconds(200))
+        let repeated = await fixture.calls
+        XCTAssertEqual(repeated, 1)
+        updates.automaticallyChecks = false
+        XCTAssertFalse(defaults.bool(forKey: "updates.checkAutomatically"))
+        XCTAssertFalse(updates.automaticallyInstalls)
+    }
     @MainActor func testUnsignedTestBundleCannotEnableSparkleInstallation() {
         XCTAssertFalse(UpdateController.isSignedUpdateBuild(Bundle.main))
     }

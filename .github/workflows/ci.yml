@@ -78,6 +78,10 @@ jobs:
           set -o pipefail
           mkdir -p "$RUNNER_TEMP/native-evidence"
           swift test --package-path macOS 2>&1 | tee "$RUNNER_TEMP/native-evidence/tests.log"
+      - name: Test signed-update integration without publisher credentials
+        run: |
+          set -o pipefail
+          SCOPE_DISTRIBUTION=developer-id swift test --package-path macOS 2>&1 | tee "$RUNNER_TEMP/native-evidence/signed-integration.log"
       - name: Build and validate native app
         run: |
           set -o pipefail
