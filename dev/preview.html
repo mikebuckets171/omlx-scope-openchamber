@@ -72,6 +72,17 @@ if(m.type === 'hello') { post({type:'ready',payload:{theme:{mode:light?'light':'
       sampledAt:Math.floor(Date.now() / 10000) * 10000},
     },
   };
+  // Concurrent models retain individual readings but no single-request headline.
+  if (params.get('multi') === '1' && ['decode','prefill','processing'].includes(phase)) {
+    payload.phase = 'processing'; payload.activeRequests = 2;
+    payload.message = 'Concurrent requests or models · per-request values withheld';
+    for (const key of ['liveDecodeTPS','livePrefillTPS','promptTokens','cachedTokens','completionTokens','elapsedSeconds','prefillETASeconds','prefillProgress','prefillProcessedTokens','prefillTotalTokens']) payload[key] = null;
+  }
+  if (params.get('multi') === 'resident') {
+    Object.assign(payload.residentModels[1], {phase:'idle',activeRequests:0,tokensPerSecond:null,prefillProgress:null});
+  }
+  payload.residentModels[0].activeRequests = ['decode','prefill','processing'].includes(phase) ? 1 : 0;
+  if (phase === 'prefill') payload.residentModels[0].tokensPerSecond = state === 'prefill-stale' ? null : 184.5;
   if (phase === 'notLoaded') { payload.residentModels = []; payload.residentModelCount = 0; }
   Object.assign(payload, window.previewOverride);
   post({type:'result',id:m.id,ok:true,payload:{status:200,body:JSON.stringify(payload)}});

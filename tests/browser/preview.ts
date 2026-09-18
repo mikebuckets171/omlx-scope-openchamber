@@ -269,6 +269,8 @@ test('resident roster reveals concurrent model activity with text-only labels', 
   const frame = await openPanel(page, 'multi=1');
   await expect(frame.locator('#resident-list .resident-row')).toHaveCount(2);
   await expect(frame.locator('#resident-list')).toContainText('77% left');
+  await expect(frame.locator('#rate')).toHaveText('—');
+  await expect(frame.locator('#activity')).toContainText('Concurrent requests');
   await page.evaluate(() => (window as any).setPreviewOverride({ residentModels: [{ id:'<img src=x onerror=alert(1)>', phase:'idle', activeRequests:0 }] }));
   await frame.locator('#refresh').click();
   await expect(frame.locator('#resident-list img')).toHaveCount(0);
@@ -294,7 +296,7 @@ test('enhanced workspace and panel render without overflow, runtime errors or hi
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
   for (const theme of ['dark', 'light']) for (const width of [320, 1160]) {
     await page.setViewportSize({width, height: 1400});
-    const frame = await openPanel(page, `theme=${theme}&multi=1&surface=${width === 1160 ? 'page' : 'panel'}`);
+    const frame = await openPanel(page, `theme=${theme}&multi=resident&surface=${width === 1160 ? 'page' : 'panel'}`);
     await page.evaluate(() => (window as any).setPreviewEpoch(2));
     await frame.locator('#refresh').click();
     await expect(frame.locator('#recent-list .generation-row')).toHaveCount(1);
@@ -303,7 +305,16 @@ test('enhanced workspace and panel render without overflow, runtime errors or hi
     await expect(frame.locator('#prefill-remaining')).toHaveText('36% remaining');
     await expect(frame.locator('#prefill-estimate')).toBeVisible();
     expect(await frame.locator('main').evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+    // An iframe clips an element screenshot beyond its viewport. Resize the test
+    // viewport to the real content height rather than publishing cropped evidence.
+    const height = await frame.locator('main').evaluate(el => Math.ceil(el.getBoundingClientRect().height) + 40);
+    await page.setViewportSize({width, height});
     await frame.locator('main').screenshot({path: info.outputPath(`enhanced-${theme}-${width}.png`)});
+    if (width === 320) {
+      await frame.locator('#compact').click();
+      await expect(frame.locator('#prefill-estimate')).toBeVisible();
+      await frame.locator('main').screenshot({path: info.outputPath(`enhanced-compact-${theme}.png`)});
+    }
   }
   expect(errors).toEqual([]);
 });
