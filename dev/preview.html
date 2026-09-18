@@ -30,14 +30,14 @@ if(m.type === 'hello') { post({type:'ready',payload:{theme:{mode:light?'light':'
   if(m.type === 'service-status') { post({type:'result',id:m.id,ok:true,payload:{status:'ready'}}); return; }
   if(m.type === 'storage') {
     const {op,key,value} = m.payload;
-    if(params.get('storage') === 'fail') { post({type:'result',id:m.id,ok:false,error:{code:'HOST_REJECTED',message:'Fixture storage failure'}}); return; }
+    if(params.get('storage') === 'fail') { post({type:'result',id:m.id,ok:false,code:'HOST_REJECTED',error:'Fixture storage failure'}); return; }
     const stored = sessionStorage.getItem(key);
     if(op === 'set') { sessionStorage.setItem(key, JSON.stringify(value)); window.previewWrites += 1; }
     const payload = op === 'get' ? {storage:true,op,found:stored !== null,...(stored === null ? {} : {value:JSON.parse(stored)})} : {storage:true,op};
     post({type:'result',id:m.id,ok:true,payload}); return;
   }
   if(m.type === 'clipboard-write') {
-    if(params.get('clipboard') === 'fail') { post({type:'result',id:m.id,ok:false,error:{code:'HOST_REJECTED',message:'Fixture clipboard failure'}}); return; }
+    if(params.get('clipboard') === 'fail') { post({type:'result',id:m.id,ok:false,code:'HOST_REJECTED',error:'Fixture clipboard failure'}); return; }
     window.previewCopied = m.payload.text;
     post({type:'result',id:m.id,ok:true,payload:null}); return;
   }
