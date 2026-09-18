@@ -1,24 +1,40 @@
-# Security policy
+# Security
 
-## Supported versions
+## Reporting
 
-Only the latest GitHub release is supported. The plugin targets OpenChamber
-1.24.0 or newer and a local oMLX server exposing the endpoint
-shapes described in the metric reference. Dashboard APIs may change between
-oMLX versions.
+Use this repository’s private **Security → Report a vulnerability** option when
+available. Otherwise open an issue asking for a private reporting channel without
+publishing the vulnerability details. Do not include credentials, auth files,
+session cookies, private conversations, or raw server responses in public issues.
 
-## Reporting a vulnerability
+Include the affected version, minimal reproduction, required access, and impact
+in the private report. Only the latest published version receives fixes.
 
-Please do not open a public issue for a credential, local-service, or
-request-routing vulnerability. Use a private GitHub security advisory for this
-repository when available. If advisories are unavailable, contact the
-repository owner through the GitHub profile and include:
+## Security boundaries
 
-- the affected release or commit;
-- a minimal reproduction;
-- the impact and any required local permissions;
-- a proposed mitigation, if known.
+- Runtime connections are loopback-only, authenticated, bounded, and read-only.
+  Redirects are rejected before credentials can be forwarded.
+- Extension permissions declare the narrow configuration reads and fixed macOS
+  diagnostic commands. The service requires a host-provided token on every route.
+- Sharing is an explicit user action and cannot send a chat message. Display and
+  report contracts exclude credentials and raw request content.
+- Mac update discovery uses an independent HTTPS session and validates the
+  repository, stable version, and exact native asset URL. Preview builds do not
+  extract or install downloads.
 
-Do not include API keys, auth files, session cookies, or raw oMLX payloads in a
-report. The service must remain loopback-only, reject non-numeric loopback
-origins, and keep credentials out of the panel and logs.
+## Mac distribution
+
+Current downloadable Mac builds are **ad-hoc signed and not notarized**. A local
+integrity signature is not an Apple-verified publisher identity or a malware
+review. macOS may block launch. Do not disable Gatekeeper, remove quarantine
+attributes, or weaken signature verification to make an installer work.
+
+The production path requires a Developer ID Application identity, hardened
+runtime, notarization, stapling, and successful platform assessment. Signed
+updates additionally require an Ed25519 public key in the app and signed update
+archives and feeds. Sparkle is pinned and its binary checksum is verified by
+SwiftPM. Automatic installation stays disabled in unconfigured preview builds.
+
+See [Release process](docs/RELEASING.md). Signing/notarization reduce distribution
+risk; they do not prove the absence of vulnerabilities. Automated fixture tests
+are not a substitute for an independent security audit or live release testing.

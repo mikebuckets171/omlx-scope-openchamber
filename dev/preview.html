@@ -3,7 +3,7 @@
 <body><aside>Synthetic preview · no connection to your runtime</aside><iframe title="OMLX Scope" src="/panel/index.html"></iframe><script>
 const frame = document.querySelector('iframe');
 const params = new URLSearchParams(location.search);
-const light = params.get('theme') === 'light';
+let themeName = params.get('theme') || 'dark';
 let state = params.get('state') || 'decode';
 window.setPreviewState = value => { state = value; };
 window.previewCopied = '';
@@ -18,23 +18,35 @@ window.setPreviewEpoch = value => { previewEpoch = value; };
 window.previewOverride = {};
 window.setPreviewOverride = value => { window.previewOverride = value; };
 window.previewRequests = 0;
-const tokens = {
-  background: light ? '#f7f9fb' : '#10151b', foreground: light ? '#172a37' : '#e9f0f5',
-  muted: light ? '#596977' : '#9aa9b7', border: light ? '#ced7df' : '#2b3743',
-  mutedSurface: light ? '#e9eef3' : '#1b252e', elevated: light ? '#ffffff' : '#202c36',
-  primary: '#609bda', primaryText: '#609bda', primaryForeground: '#ffffff',
-  success: light ? '#197e68' : '#7dd9bd', successText: light ? '#197e68' : '#7dd9bd',
-  warning: light ? '#966113' : '#dfb976', warningText: light ? '#966113' : '#dfb976',
-  error: light ? '#b13a45' : '#ee8992', errorText: light ? '#b13a45' : '#ee8992',
-  info: light ? '#286cae' : '#86b7ed', infoText: light ? '#286cae' : '#86b7ed',
-  font: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', mono: 'ui-monospace, SFMono-Regular, Menlo, monospace', radius: '9px',
-};
+function theme(name) {
+  const light = name === 'light' || name === 'sand';
+  const palette = name === 'violet' ? ['#191520','#221d2b','#dfc7ff','#9562c9','#ffffff']
+    : name === 'sand' ? ['#faf7f1','#ffffff','#79522a','#79522a','#ffffff']
+    : light ? ['#f7f9fb','#ffffff','#245a90','#2868a5','#ffffff']
+    : ['#10151b','#202c36','#98c8fa','#3b72ad','#ffffff'];
+  return {mode:light?'light':'dark',tokens:{
+    background:palette[0],elevated:palette[1],foreground:light?'#172a37':'#e9f0f5',
+    elevatedForeground:light?'#172a37':'#e9f0f5',muted:light?'#596977':'#9aa9b7',
+    subtle:light?'#687683':'#8595a5',border:light?'#ced7df':'#3b3a47',
+    hover:light?'#e8e4de':'#2c2736',active:light?'#e1ddd7':'#342e40',
+    selection:light?'#dfd4c4':'#433653',selectionForeground:light?'#172a37':'#e9f0f5',
+    focus:palette[2],mutedSurface:light?'#f0ece6':'#25222d',primary:palette[3],primaryText:palette[2],primaryForeground:palette[4],
+    success:light?'#197e68':'#7dd9bd',successText:light?'#197e68':'#7dd9bd',
+    warning:light?'#966113':'#dfb976',warningText:light?'#966113':'#dfb976',
+    error:light?'#b13a45':'#ee8992',errorText:light?'#b13a45':'#ee8992',
+    info:light?'#286cae':'#86b7ed',infoText:light?'#286cae':'#86b7ed',
+    font:'-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',mono:'ui-monospace, SFMono-Regular, Menlo, monospace',radius:'9px'
+  }};
+}
+window.previewTheme = theme(themeName);
 const post = (message) => frame.contentWindow.postMessage({channel:'openchamber.sdk',v:1,...message}, location.origin);
+const ready = () => post({type:'ready',payload:{theme:window.previewTheme,locale:'en-US',directory:null,session:currentSession,surface:params.get('surface') === 'page' ? 'page' : 'panel',connection:{connected:true,account:''},settings:{},item:sessionItem}});
+window.setPreviewTheme = value => { window.previewTheme = theme(value); ready(); };
 window.setPreviewSession = value => { currentSession=value; post({type:'session',payload:{session:value}}); };
 window.addEventListener('message', (event) => {
   if(event.source !== frame.contentWindow || event.data?.channel !== 'openchamber.sdk') return;
   const m = event.data;
-if(m.type === 'hello') { post({type:'ready',payload:{theme:{mode:light?'light':'dark',tokens},locale:'en-US',directory:null,session:currentSession,surface:params.get('surface') === 'page' ? 'page' : 'panel',connection:{connected:true,account:''},settings:{},item:sessionItem}}); return; }
+if(m.type === 'hello') { ready(); return; }
   if(m.type === 'service-status') { post({type:'result',id:m.id,ok:true,payload:{status:'ready'}}); return; }
   if(m.type === 'storage') {
     const {op,key,value} = m.payload;

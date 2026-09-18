@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.6 — 2026-09-18
+
+- Follow OpenChamber’s active theme, including accent colors and live theme changes.
+- Move copying and chat-draft sharing into a compact, keyboard-accessible Share menu.
+- Keep feedback out of the monitor layout and preserve prefill, captures, and compact mode.
+- Add native Check for Updates and opt-in daily GitHub release checks.
+- Integrate pinned Sparkle for configured Developer ID builds; previews remain manual-install.
+- Add hardened-runtime packaging and a fail-closed notarization/signed-feed release path.
+- Refresh installation, architecture, privacy, contribution, and release documentation.
+
+The native preview is not notarized. Automatic installation requires publisher
+signing credentials and is not enabled in this release.
+
 ## 0.5.5 — 2026-09-18
 
 - Added host-provided OpenChamber context and a stats-to-draft action that never sends automatically.
