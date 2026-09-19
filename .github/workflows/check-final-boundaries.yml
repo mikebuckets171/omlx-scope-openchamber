@@ -1,0 +1,115 @@
+name: Verify final boundaries
+on:
+  push:
+    branches: [work/extension-finish]
+    paths: [.github/workflows/check-final-boundaries.yml]
+permissions:
+  contents: write
+jobs:
+  verify:
+    if: github.repository == 'mikebuckets171/omlx-scope-openchamber' && github.ref == 'refs/heads/work/extension-finish'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+      - name: Apply and exercise final edge-case fixes
+        run: |
+          set -euo pipefail
+          git diff --exit-code 2fabb51c855f5c67abf5d66b29b764aec88216a0 HEAD -- . ':!.github/workflows/check-final-boundaries.yml'
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('service/config.ts');s=p.read_text()
+          old="import { open } from 'node:fs/promises';"
+          assert s.count(old)==1
+          s=s.replace(old,old+"\nimport { constants } from 'node:fs';")
+          old="const handle = await open(path, 'r');"
+          assert s.count(old)==1
+          s=s.replace(old,"// Do not wait for a writer when an invalid configuration path is a FIFO.\n    const handle = await open(path, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0));")
+          p.write_text(s)
+          p=Path('panel/chart-inspector.ts');s=p.read_text()
+          old='    this.end = end; this.upper = upper;'
+          assert s.count(old)==1
+          s=s.replace(old,"    if (this.selectedAt !== null && !this.points.some(point => point.at === this.selectedAt)) this.selectedAt = null;\n"+old)
+          p.write_text(s)
+          with Path('service/config.test.ts').open('a') as f: f.write('''
+
+          it.skipIf(process.platform === 'win32')('rejects a pipe configuration without waiting for a writer', async () => {
+            const { mkdtemp, rm } = await import('node:fs/promises');
+            const { tmpdir } = await import('node:os');
+            const { join } = await import('node:path');
+            const { spawnSync } = await import('node:child_process');
+            const home = await mkdtemp(join(tmpdir(), 'scope-pipe-config-'));
+            try {
+              const path = join(home, 'config.json');
+              const create = spawnSync('mkfifo', [path], {timeout: 2_000, encoding: 'utf8'});
+              expect(create.status).toBe(0);
+              const input = JSON.stringify({home, env: {OPENCODE_CONFIG: path}});
+              const script = `import {resolveOmlxConfig} from ${JSON.stringify(new URL('./config.ts', import.meta.url).href)}; console.log((await resolveOmlxConfig(${input})).issue);`;
+              // Isolate the call so a regression cannot leave a blocked filesystem thread in the test runner.
+              const read = spawnSync(process.execPath, ['--eval', script], {timeout: 2_000, encoding: 'utf8'});
+              expect(read.error).toBeUndefined();
+              expect(read.status).toBe(0);
+              expect(read.stdout.trim()).toBe('unreadable_config');
+            } finally { await rm(home, {recursive: true, force: true}); }
+          });
+          ''')
+          Path('panel/chart-selection.test.ts').write_text('''import { expect, it } from 'bun:test';
+          import { ChartInspector } from './chart-inspector.ts';
+
+          // Attribute-only view double; full pointer/keyboard behavior is also checked in browsers.
+          class View extends EventTarget {
+            readonly attributes = new Map<string, string>();
+            textContent = '';
+            tabIndex = -1;
+            setAttribute(name: string, value: string): void { this.attributes.set(name, value); }
+            toggleAttribute(name: string, force: boolean): void {
+              if (force) this.attributes.set(name, ''); else this.attributes.delete(name);
+            }
+          }
+
+          it('keeps a selected reading until it expires, then clears rather than moving it to another reading', () => {
+            const line = new View(), dot = new View(), output = new View();
+            const plot = Object.assign(new View(), {querySelector: (selector: string) => selector === '#inspect-line' ? line : dot});
+            const inspector = new ChartInspector(plot as unknown as HTMLElement, output as unknown as HTMLElement);
+            const first = {at: 1_000, rate: 12, phase: 'decode' as const, segment: 1};
+            const later = {at: 80_000, rate: 24, phase: 'decode' as const, segment: 1};
+            inspector.update([first], 1_000, 50);
+            plot.dispatchEvent(new Event('focus'));
+            expect(output.textContent).toContain('12.0 tok/s');
+            inspector.update([first, later], 80_000, 50);
+            expect(output.textContent).toContain('12.0 tok/s');
+            inspector.update([later], 91_001, 50);
+            expect(output.textContent).toBe('Point to inspect · arrow keys when focused');
+            expect(line.attributes.has('hidden')).toBe(true);
+            expect(dot.attributes.has('hidden')).toBe(true);
+            inspector.dispose();
+          });
+          ''')
+          PY
+      - name: Build and verify
+        run: bun install --frozen-lockfile && bun run check
+      - name: Commit verified source and regenerated bundles
+        run: |
+          set -euo pipefail
+          git fetch origin work/extension-finish
+          test "$(git rev-parse FETCH_HEAD)" = "$GITHUB_SHA"
+          git diff --exit-code -- bun.lock package.json macOS scripts/package-macos.sh scripts/distribute-macos.sh
+          git rm .github/workflows/check-final-boundaries.yml
+          git add service/config.ts service/config.test.ts service/main.js panel/chart-inspector.ts panel/chart-selection.test.ts panel/main.js
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Reject blocking config paths and clear expired chart selections'
+          git push origin HEAD:work/extension-finish
+          git archive --format=zip --output="$RUNNER_TEMP/review-source.zip" HEAD
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: reviewed-source
+          path: ${{ runner.temp }}/review-source.zip
+          retention-days: 3
+          if-no-files-found: error
