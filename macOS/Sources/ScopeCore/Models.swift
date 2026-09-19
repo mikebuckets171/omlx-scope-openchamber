@@ -22,6 +22,8 @@ public struct RuntimeReading: Sendable, Equatable {
     public var phase: Phase = .connecting
     public var model: String?
     public var rate: Double?
+    /// Counter-based output over a bounded recent window, not a request average.
+    public var observedRate: Double?
     public var active: Double?
     public var queued: Double?
     public var contextWindow: Double?

@@ -43,6 +43,7 @@ public final class MonitorModel {
     @ObservationIgnored private var started = false
     @ObservationIgnored private var failures = 0
     @ObservationIgnored private var historySegment = 0
+    @ObservationIgnored private var rateHistoryBasis = ""
     @ObservationIgnored private var nextRuntimeAt: TimeInterval = 0
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
@@ -81,6 +82,11 @@ public final class MonitorModel {
         if usesDiscovery, let problem = saved.problem { settingsMessage = problem; configurationProblem = problem }
     }
 
+    public var displayRate: Double? { runtime.rate ?? runtime.observedRate }
+    public var rateCaption: String {
+        runtime.rate == nil && runtime.observedRate != nil ? "Recent output · observed over up to 10s"
+            : runtime.phase == .prefill ? "Reported prefill speed" : "Request average"
+    }
     public var menuText: String {
         if paused { return "Paused" }
         switch menuReadout {
@@ -90,11 +96,11 @@ public final class MonitorModel {
         case .speed:
             if let prefill { return prefill.menuText(progressDisplay) }
             if runtime.phase == .prefill { return "Prefill" }
-            if runtime.connected, let rate = runtime.rate {
+            if runtime.connected, let rate = displayRate {
                 let value = rate >= 1000 ? rate.formatted(.number.notation(.compactName).precision(.fractionLength(1))) : DisplayFormat.number(rate)
                 return value + " t/s"
             }
-            return runtime.phase == .idle ? "Ready" : runtime.phase == .offline ? "Offline" : "—"
+            return runtime.phase == .idle ? "Ready" : runtime.phase == .offline ? "Offline" : runtime.hasActivity ? "Working" : "—"
         }
     }
     public var statusText: String { paused ? "Monitoring paused" : runtime.phase.title }
@@ -146,6 +152,7 @@ public final class MonitorModel {
         loop?.cancel(); loop = nil
         guard started, !paused, !asleep, !screenAsleep, isVisible || menuReadout != .icon else { return }
         loop = Task { [weak self] in
+            await self?.client.resetOutputObservation()
             while !Task.isCancelled {
                 guard let self, current == self.generation else { return }
                 await self.poll(current)
@@ -174,7 +181,12 @@ public final class MonitorModel {
         runtime = reading
         failures = reading.connected ? 0 : min(5, failures + 1)
         nextRuntimeAt = reading.connected ? 0 : ProcessInfo.processInfo.systemUptime + min(30, pow(2, Double(failures)))
-        speedHistory.append(time: reading.sampledAt, value: reading.rate, segment: reading.epoch &+ (historySegment &* 1_000_000))
+        let basis = reading.phase.rawValue + (reading.rate == nil && reading.observedRate != nil ? ":observed" : ":reported")
+        if reading.rate != nil || reading.observedRate != nil {
+            if basis != rateHistoryBasis { speedHistory.clear() }
+            rateHistoryBasis = basis
+        }
+        speedHistory.append(time: reading.sampledAt, value: reading.rate ?? reading.observedRate, segment: reading.epoch &+ (historySegment &* 1_000_000))
     }
 
     private func collectRuntime() async -> RuntimeReading? {

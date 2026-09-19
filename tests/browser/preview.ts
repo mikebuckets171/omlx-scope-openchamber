@@ -624,3 +624,27 @@ test('a restored browser view waits for fresh readings even without a visibility
   await frame.locator('#compact').click();
   await expect(frame.locator('#rate')).toHaveText('—');
 });
+
+
+test('DFlash shows observed output, never invents a request average or prefill percentage', async ({page}, info) => {
+  const frame = await openPanel(page, 'state=dflash-preparing');
+  await expect(frame.locator('#phase')).toHaveText('Processing');
+  await expect(frame.locator('#prefill-progress')).toBeHidden();
+  await expect(frame.locator('#activity')).toContainText('does not report prefill percentage');
+  await page.evaluate(() => { (window as any).setPreviewState('dflash'); });
+  await expect(frame.locator('#phase')).toHaveText('Generating');
+  await expect(frame.locator('#unit')).toContainText('recent output');
+  await expect(frame.locator('#chart-title')).toHaveText('Generation · recent output');
+  await expect(frame.locator('#request-output')).toContainText('output tokens');
+  await expect(frame.locator('#prefill-progress')).toBeHidden();
+  await expect(frame.locator('#reuse')).toHaveText('—');
+  await frame.locator('#pause').click();
+  await expect(frame.locator('#rate')).toHaveText('Paused');
+  await frame.locator('#pause').click();
+  await expect(frame.locator('#unit')).toContainText('recent output');
+  await page.screenshot({path:info.outputPath('dflash-observed.png'),fullPage:true});
+  await page.evaluate(() => { (window as any).setPreviewState('prefill'); (window as any).setPreviewEpoch(2); });
+  await expect(frame.locator('#prefill-remaining')).toHaveText('36% remaining');
+  await expect(frame.locator('#chart-title')).toHaveText('Prefill · reported speed');
+  await expect(frame.locator('#recent-speed')).toBeHidden();
+});

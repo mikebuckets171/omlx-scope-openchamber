@@ -59,7 +59,7 @@ export class ChartInspector {
     this.line.toggleAttribute('hidden', !point); this.dot.toggleAttribute('hidden', !point);
     const value = point ?? this.points.at(-1);
     if (value) {
-      const label = `${new Date(value.at).toLocaleTimeString()} · ${value.rate.toFixed(1)} tok/s · ${value.phase === 'decode' ? 'request average' : 'reported prefill speed'}`;
+      const label = `${new Date(value.at).toLocaleTimeString()} · ${value.rate.toFixed(1)} tok/s · ${value.basis === 'observed' ? 'recent output' : value.phase === 'decode' ? 'request average' : 'reported prefill speed'}`;
       this.plot.setAttribute('aria-valuenow', String(this.points.indexOf(value)));
       this.plot.setAttribute('aria-valuetext', label);
       this.output.textContent = point ? label : 'Point to inspect · arrow keys when focused';

@@ -82,6 +82,14 @@ Automatic installation is enabled only in properly configured Developer ID
 builds. See the [Mac guide](https://github.com/mikebuckets171/omlx-scope-openchamber/blob/main/macOS/README.md) and
 [release-signing guide](https://github.com/mikebuckets171/omlx-scope-openchamber/blob/main/docs/RELEASING.md) for the distinction.
 
+### DFlash
+
+DFlash output counts and recent speed work in the extension and Mac menu bar.
+When the engine does not report prefill progress, Scope shows that it is working
+instead of inventing a percentage. Standard fallback prefill remains supported.
+See the [compatibility guide](https://github.com/mikebuckets171/omlx-scope-openchamber/blob/main/docs/COMPATIBILITY.md)
+for exactly what each engine reports.
+
 ## Small by design
 
 The extension uses vanilla TypeScript, the OpenChamber SDK, and existing oMLX

@@ -3,6 +3,7 @@
 ## 0.5.8 — 2026-09-19
 
 - Check compatibility with oMLX 0.6.4 and update the OpenChamber SDK to 1.24.2.
+- Show DFlash output counts and observed recent speed in the extension and Mac menu bar, without inventing unavailable prefill progress.
 - Stop opening Keychain at Mac startup. New API keys stay in memory unless you choose to save them.
 - Make saved-key access an explicit choice, with cancel-safe settings and no changes to existing key protection.
 - Match the Mac app's OpenCode connection setup to the extension, including commented configuration files.

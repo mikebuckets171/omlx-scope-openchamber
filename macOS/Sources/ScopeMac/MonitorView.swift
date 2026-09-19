@@ -71,11 +71,11 @@ public struct OverviewContent: View {
                 Text(model.runtime.model?.split(separator: "/").last.map(String.init) ?? "Your local model")
                     .font(.headline).lineLimit(2).help(model.runtime.model ?? "No model reported")
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text(model.runtime.rate != nil && !model.paused ? DisplayFormat.number(model.runtime.rate) : model.paused ? "Paused" : model.runtime.phase == .idle ? "Ready" : "—")
+                    Text(model.displayRate != nil && !model.paused ? DisplayFormat.number(model.displayRate) : model.paused ? "Paused" : model.runtime.phase == .idle ? "Ready" : "—")
                         .font(.system(size: 66, weight: .light, design: .rounded)).monospacedDigit().contentTransition(.identity)
-                    if model.runtime.rate != nil && !model.paused { Text("tokens / second").font(.subheadline).foregroundStyle(.secondary) }
+                    if model.displayRate != nil && !model.paused { Text("tokens / second").font(.subheadline).foregroundStyle(.secondary) }
                 }
-                Text(model.paused ? "Readings are held. Your model is not paused." : model.runtime.message)
+                Text(model.paused ? "Readings are held. Your model is not paused." : model.runtime.observedRate != nil && model.runtime.rate == nil ? model.rateCaption : model.runtime.message)
                     .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 if let progress = model.prefill { PrefillCard(reading: progress, paused: model.paused) }
                 else if model.runtime.phase == .prefill {
@@ -89,7 +89,7 @@ public struct OverviewContent: View {
                     Text(model.paused ? "Last reading · monitoring paused" : "Model limit, not OpenCode’s compaction threshold.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                HistoryPlot(history: model.speedHistory, height: 104, caption: model.paused ? "Paused history" : "Request average · tok/s")
+                HistoryPlot(history: model.speedHistory, height: 104, caption: model.paused ? "Paused history" : model.rateCaption + " · tok/s")
                 Divider()
                 HStack(alignment: .top, spacing: 24) {
                     MetricValue(title: "Active requests", value: DisplayFormat.tokens(model.runtime.active))

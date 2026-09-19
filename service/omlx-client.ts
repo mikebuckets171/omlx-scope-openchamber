@@ -293,7 +293,7 @@ export class OmlxClient {
       }
       return {
         ...normalized,
-        traceEpoch: this.traceEpoch,
+        traceEpoch: this.signalIdentity ? this.traceEpoch : null,
         message: normalized.message ?? (this.statsState === 'stale'
           ? 'Live activity connected · session statistics are from the last successful read'
           : this.statsState === 'unavailable'
@@ -334,10 +334,10 @@ export class OmlxClient {
     for (const modelValue of Array.isArray(active?.models) ? active.models : []) {
       const model = asObject(modelValue);
       if (!model) continue;
-      for (const kind of ['prefilling', 'generating']) {
+      for (const kind of ['prefilling', 'generating', 'activities']) {
         for (const entry of Array.isArray(model[kind]) ? model[kind] : []) {
           const flight = asObject(entry);
-          if (!flight) continue;
+          if (!flight || kind === 'activities' && (flight.kind !== 'generate' || typeof flight.request_id !== 'string' || !flight.request_id.trim())) continue;
           const identity = JSON.stringify([model.id, kind, flight.request_id, kind === 'prefilling' ? [flight.phase, flight.total] : null]);
           identities.push(identity);
           if (kind !== 'prefilling') continue;

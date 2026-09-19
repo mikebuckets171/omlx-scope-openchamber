@@ -114,6 +114,7 @@ try {
   assert.equal(service.result.code, 0, 'Service did not stop cleanly.');
   // Exercise real HTTP collection through the extracted, minified Node bundle.
   let flight = { request_id: 'private-smoke-request', processed: 64, total: 100, speed: 184, eta: 0.2 };
+  let primary = false;
   mockRuntime = createHTTPServer((request, response) => {
     const path = new URL(request.url, 'http://127.0.0.1').pathname;
     let body;
@@ -122,7 +123,7 @@ try {
       response.setHeader('Set-Cookie', 'omlx_admin_session=smoke; HttpOnly'); body = {};
     } else if (path === '/v1/models/status') body = { models: [] };
     else if (path === '/admin/api/activity' || path === '/admin/api/stats') {
-      body = { engines: {}, active_models: { models: [{ id: 'fixture', active_requests: 1, prefilling: [flight] }] } };
+      body = { engines: {}, active_models: { models: [{ id: 'fixture', active_requests: 1, prefilling: primary ? [] : [flight], activities: primary ? [flight] : [] }] } };
     } else { response.writeHead(404); response.end(); return; }
     response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify(body));
   });
@@ -153,7 +154,26 @@ try {
   assert.equal(invalid.prefillProgress, null, 'Malformed progress must not become 100% complete.');
   assert.equal(invalid.prefillETASeconds, null);
   assert.equal(invalid.residentModels[0].prefillProgress, null);
+  primary = true;
+  flight = {request_id: 'private-primary-request', kind: 'generate', detail: 'generating', token_count: 64, elapsed_seconds: 30, last_activity_age_seconds: 0.1};
+  await delay(550);
+  const dflash = await (await get('/snapshot')).json();
+  assert.equal(dflash.available, true);
+  assert.equal(dflash.phase, 'decode');
+  assert.equal(dflash.completionTokens, 64);
+  assert.equal(dflash.liveDecodeTPS, null, 'Activity elapsed time is not a decode average.');
+  assert.equal(dflash.prefillProgress, null, 'Primary DFlash has no reported prefill fraction.');
+  assert(Number.isFinite(dflash.traceEpoch));
+  assert(!JSON.stringify(dflash).includes('private-primary-request'));
+  primary = false;
+  flight = {request_id: 'private-fallback', processed: 25, total: 100, speed: 100, eta: 0.75};
+  await delay(550);
+  const fallback = await (await get('/snapshot')).json();
+  assert.equal(fallback.phase, 'prefill');
+  assert.equal(fallback.prefillProgress, 0.25);
+  assert.notEqual(fallback.traceEpoch, dflash.traceEpoch);
   await stop(activeService);
+  console.log('PASS: packaged DFlash output and fallback transition use reported counters without inventing speed or prefill.');
   console.log('PASS: packaged prefill counters and invalid-progress rejection verified against loopback fixture.');
   console.log('PASS: packaged Node service starts without node_modules; /health, /snapshot, JSONC, authentication, startup errors, and shutdown verified.');
 } finally {

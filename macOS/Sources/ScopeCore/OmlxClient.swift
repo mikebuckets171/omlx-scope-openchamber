@@ -39,6 +39,7 @@ public actor OmlxClient {
     private var pending: Task<RuntimeReading, Never>?
     private var identity = ""
     private var epoch = 0
+    private var outputMeter = ObservedOutput()
     private var processed: Double?
     private var changedAt: TimeInterval = 0
 
@@ -47,6 +48,7 @@ public actor OmlxClient {
     }
 
     public func cancel() { pending?.cancel() }
+    public func resetOutputObservation() { outputMeter.clear() }
 
     public func snapshot(connection next: Connection) async -> RuntimeReading {
         // Serial consumer in the UI; simultaneous requests for the same connection coalesce.
@@ -134,9 +136,11 @@ public actor OmlxClient {
                 result.message = "Prefill active. Waiting for fresh progress."
             }
             result.epoch = epoch
+            if id.isEmpty { outputMeter.clear() }
+            else { result.observedRate = outputMeter.observe(result, at: clock()) }
             return result
         } catch {
-            cookie = nil; verifiedAt = -.infinity; epoch += 1
+            cookie = nil; verifiedAt = -.infinity; epoch += 1; outputMeter.clear()
             // Never expose credentials, URLs from redirects, or raw server bodies in UI/errors.
             return .unavailable((error as? ConnectionError ?? .unreachable).localizedDescription)
         }

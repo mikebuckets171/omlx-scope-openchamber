@@ -47,6 +47,7 @@ public enum Normalizer {
         let model = models.first { !objects($0["generating"]).isEmpty }
             ?? models.first { !objects($0["prefilling"]).isEmpty }
             ?? models.first { (nonnegative($0["active_requests"]) ?? 0) > 0 }
+            ?? models.first { !objects($0["activities"]).isEmpty }
             ?? models.first { $0["is_loading"] as? Bool == true }
             ?? models.first { preferredModel != nil && identifier($0["id"]) == preferredModel } ?? models.first
         if let model {
@@ -96,7 +97,24 @@ public enum Normalizer {
                 result.progressStale = flight["progress_stale"] as? Bool == true
                 if result.progressStale { result.rate = nil; result.prefillETA = nil }
                 result.message = result.progressStale ? "Waiting for fresh prefill progress." : "Reading context · reported prefill average"
-            } else if model["is_loading"] as? Bool == true || (result.active ?? 0) > 0 || !objects(model["activities"]).isEmpty {
+            } else if let activity = objects(model["activities"]).first {
+                // Accepted output from DFlash primary mode. Elapsed includes
+                // prefill, so there is no invented request-average decode rate.
+                let count = activity["kind"] as? String == "generate" ? nonnegative(activity["token_count"]) : nil
+                if let count, count.rounded() == count, count <= 9_007_199_254_740_991 { result.output = count }
+                result.elapsed = nonnegative(activity["elapsed_seconds"])
+                if (result.output ?? 0) > 0, (result.elapsed ?? 0) > 0,
+                   let age = nonnegative(activity["last_activity_age_seconds"]), age <= 5,
+                   identifier(activity["request_id"]) != nil {
+                    result.phase = .decode
+                    result.message = "Output arriving · request-average speed not reported"
+                } else {
+                    result.phase = .processing
+                    result.message = (result.output ?? 0) > 0 ? "Waiting for fresh output."
+                        : activity["kind"] as? String == "generate" ? "Working · this engine does not report prefill percentage."
+                        : "Runtime active · detailed token progress unavailable."
+                }
+            } else if model["is_loading"] as? Bool == true || (result.active ?? 0) > 0 {
                 result.phase = .processing; result.message = "Runtime is working. Token speed is not reported yet."
             } else if nonnegative(model["active_requests"]) == 0 ||
                 ["waiting_requests", "prefilling", "generating", "waiting", "activities", "is_loading"].contains(where: { model[$0] != nil }) {
@@ -128,8 +146,9 @@ public enum Normalizer {
         let models = objects(object(object(json)["active_models"])["models"])
         var parts: [String] = []; var progress: Double?
         for model in models {
-            for phase in ["prefilling", "generating"] {
+            for phase in ["prefilling", "generating", "activities"] {
                 for flight in objects(model[phase]) {
+                    if phase == "activities" && (flight["kind"] as? String != "generate" || identifier(flight["request_id"]) == nil) { continue }
                     // JSON serialization prevents ambiguous delimiter collisions.
                     let identity: [Any] = [identifier(model["id"]) ?? "", phase, identifier(flight["request_id"]) ?? "",
                                           phase == "prefilling" ? [identifier(flight["phase"]) ?? "", nonnegative(flight["total"]) as Any? ?? NSNull()] : NSNull()]

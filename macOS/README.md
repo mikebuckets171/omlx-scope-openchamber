@@ -102,3 +102,16 @@ runtime, and dynamic-library paths. CI compiles and tests both configurations.
 CI builds, tests, launches, and renders fixtures on macOS ARM64. Live oMLX use,
 Keychain prompts, complete menu interaction, VoiceOver, battery/inference impact,
 and signed end-to-end updates require separate validation.
+
+
+## DFlash
+
+The Activity readout shows **Working** while primary DFlash prepares a request.
+Once output arrives, it shows measured recent output speed after at least three
+samples spanning two seconds. The popover identifies this as **Recent output**;
+it is not a reported request average. It also shows the reported output count.
+The window and popover explain when prefill percentage is not reported.
+
+The standard oMLX fallback retains the regular prefill percentage and reported
+speed display. Switching requests or generation paths resets measured speed.
+Neither path requires an extra polling loop or changes your inference settings.

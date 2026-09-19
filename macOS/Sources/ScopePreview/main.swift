@@ -102,6 +102,12 @@ func renderPreviews() async throws {
         try await export(OverviewContent(model: model).padding(24).frame(width: 850), name: "overview-prefill-\(theme)", width: 850, scheme: scheme)
         model.runtime.progressStale = true
         try await export(MenuPopover(model: model), name: "menu-prefill-held-\(theme)", width: 345, scheme: scheme)
+        var dflash = runtime
+        dflash.rate = nil; dflash.observedRate = 32; dflash.prompt = nil; dflash.reused = nil
+        dflash.model = "Qwen · DFlash preview"
+        model.runtime = dflash
+        try await export(MenuPopover(model: model), name: "menu-dflash-\(theme)", width: 345, scheme: scheme)
+        try await export(MenuBarLabel(model: model).padding(8).frame(width: 150, height: 38), name: "menubar-dflash-\(theme)", width: 150, scheme: scheme)
         model.runtime = runtime
     }
     model.togglePause()

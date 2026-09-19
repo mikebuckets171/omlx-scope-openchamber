@@ -226,6 +226,7 @@ const matchingModel = (models: JsonObject[], preferredModel: string | null): Jso
   models.find((model) => Array.isArray(model.generating) && model.generating.length > 0)
     ?? models.find((model) => Array.isArray(model.prefilling) && model.prefilling.length > 0)
     ?? models.find((model) => (nonnegative(model.active_requests) ?? 0) > 0)
+    ?? models.find((model) => arrayOfObjects(model.activities).length > 0)
     ?? models.find((model) => model.is_loading === true)
     ?? (preferredModel === null ? undefined : models.find((model) => model.id === preferredModel))
     ?? models[0]
@@ -384,11 +385,26 @@ const normalizeFlights = (model: JsonObject | null, lookup: JsonObject, ambiguou
     };
   }
 
-  if (arrayOfObjects(model.activities).length > 0 && summary.phase === 'idle') {
+  const activity = arrayOfObjects(model.activities)[0];
+  if (activity && summary.phase === 'idle') {
+    // DFlash primary mode reports accepted output through ActivityTrackingMixin.
+    // Its elapsed time includes preparation/prefill, so dividing tokens by it
+    // would mislabel end-to-end throughput as generation speed.
+    const generated = activity.kind === 'generate' ? tokenCount(activity.token_count) : null;
+    const elapsed = nonnegative(activity.elapsed_seconds);
+    const age = nonnegative(activity.last_activity_age_seconds);
+    const fresh = generated !== null && generated > 0 && elapsed !== null && elapsed > 0
+      && age !== null && age <= 5 && text(activity.request_id) !== null;
     summary = {
       ...summary,
-      phase: 'processing',
-      message: 'Runtime active · detailed token progress unavailable',
+      phase: fresh ? 'decode' : 'processing',
+      completionTokens: generated,
+      elapsedSeconds: elapsed,
+      processingElapsed: elapsed,
+      message: fresh ? 'Output arriving · request-average speed not reported'
+        : generated !== null && generated > 0 ? 'Waiting for fresh output'
+        : activity.kind === 'generate' ? 'Working · this engine does not report prefill percentage'
+        : 'Runtime active · detailed token progress unavailable',
     };
   }
   if ((nonnegative(model.active_requests) ?? 0) > 0 && summary.phase === 'idle') {

@@ -1232,6 +1232,451 @@
         }
       },
       "invalid": true
+    },
+    {
+      "name": "DFlash primary before first token",
+      "activity": {
+        "active_models": {
+          "models": [
+            {
+              "id": "fixture-dflash",
+              "active_requests": 1,
+              "waiting_requests": 0,
+              "generating": [],
+              "prefilling": [],
+              "activities": [
+                {
+                  "request_id": "synthetic-dflash",
+                  "kind": "generate",
+                  "detail": "generating",
+                  "elapsed_seconds": 15,
+                  "last_activity_age_seconds": 0.1
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expected": {
+        "phase": "processing",
+        "rate": null,
+        "output": null,
+        "progress": null,
+        "eta": null,
+        "prompt": null
+      }
+    },
+    {
+      "name": "DFlash primary accepted output",
+      "activity": {
+        "active_models": {
+          "models": [
+            {
+              "id": "fixture-dflash",
+              "active_requests": 1,
+              "waiting_requests": 0,
+              "generating": [],
+              "prefilling": [],
+              "activities": [
+                {
+                  "request_id": "synthetic-dflash",
+                  "kind": "generate",
+                  "detail": "generating",
+                  "elapsed_seconds": 15,
+                  "last_activity_age_seconds": 0.1,
+                  "token_count": 64
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expected": {
+        "phase": "decode",
+        "rate": null,
+        "output": 64,
+        "progress": null,
+        "eta": null,
+        "reused": null,
+        "contextRemaining": null
+      }
+    },
+    {
+      "name": "DFlash primary stale output",
+      "activity": {
+        "active_models": {
+          "models": [
+            {
+              "id": "fixture-dflash",
+              "active_requests": 1,
+              "waiting_requests": 0,
+              "generating": [],
+              "prefilling": [],
+              "activities": [
+                {
+                  "request_id": "synthetic-dflash",
+                  "kind": "generate",
+                  "detail": "generating",
+                  "elapsed_seconds": 15,
+                  "last_activity_age_seconds": 6,
+                  "token_count": 64
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expected": {
+        "phase": "processing",
+        "rate": null,
+        "output": 64,
+        "progress": null
+      }
+    },
+    {
+      "name": "DFlash missing output age",
+      "activity": {
+        "active_models": {
+          "models": [
+            {
+              "id": "fixture-dflash",
+              "active_requests": 1,
+              "waiting_requests": 0,
+              "generating": [],
+              "prefilling": [],
+              "activities": [
+                {
+                  "request_id": "synthetic-dflash",
+                  "kind": "generate",
+                  "detail": "generating",
+                  "elapsed_seconds": 15,
+                  "token_count": 64
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expected": {
+        "phase": "processing",
+        "rate": null,
+        "output": 64
+      }
+    },
+    {
+      "name": "DFlash missing identity",
+      "activity": {
+        "active_models": {
+          "models": [
+            {
+              "id": "fixture-dflash",
+              "active_requests": 1,
+              "waiting_requests": 0,
+              "generating": [],
+              "prefilling": [],
+              "activities": [
+                {
+                  "kind": "generate",
+                  "detail": "generating",
+                  "elapsed_seconds": 15,
+                  "last_activity_age_seconds": 0.1,
+                  "token_count": 64
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expected": {
+        "phase": "processing",
+        "rate": null,
+        "output": 64
+      }
+    },
+    {
+      "name": "DFlash invalid output fractional",
+      "activity": {
+        "active_models": {
+          "models": [
+            {
+              "id": "fixture-dflash",
+              "active_requests": 1,
+              "waiting_requests": 0,
+              "generating": [],
+              "prefilling": [],
+              "activities": [
+                {
+                  "request_id": "synthetic-dflash",
+                  "kind": "generate",
+                  "detail": "generating",
+                  "elapsed_seconds": 15,
+                  "last_activity_age_seconds": 0.1,
+                  "token_count": 3.5
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expected": {
+        "phase": "processing",
+        "rate": null,
+        "output": null,
+        "progress": null
+      }
+    },
+    {
+      "name": "DFlash invalid output negative",
+      "activity": {
+        "active_models": {
+          "models": [
+            {
+              "id": "fixture-dflash",
+              "active_requests": 1,
+              "waiting_requests": 0,
+              "generating": [],
+              "prefilling": [],
+              "activities": [
+                {
+                  "request_id": "synthetic-dflash",
+                  "kind": "generate",
+                  "detail": "generating",
+                  "elapsed_seconds": 15,
+                  "last_activity_age_seconds": 0.1,
+                  "token_count": -1
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expected": {
+        "phase": "processing",
+        "rate": null,
+        "output": null,
+        "progress": null
+      }
+    },
+    {
+      "name": "DFlash invalid output boolean",
+      "activity": {
+        "active_models": {
+          "models": [
+            {
+              "id": "fixture-dflash",
+              "active_requests": 1,
+              "waiting_requests": 0,
+              "generating": [],
+              "prefilling": [],
+              "activities": [
+                {
+                  "request_id": "synthetic-dflash",
+                  "kind": "generate",
+                  "detail": "generating",
+                  "elapsed_seconds": 15,
+                  "last_activity_age_seconds": 0.1,
+                  "token_count": true
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expected": {
+        "phase": "processing",
+        "rate": null,
+        "output": null,
+        "progress": null
+      }
+    },
+    {
+      "name": "DFlash invalid output overflow",
+      "activity": {
+        "active_models": {
+          "models": [
+            {
+              "id": "fixture-dflash",
+              "active_requests": 1,
+              "waiting_requests": 0,
+              "generating": [],
+              "prefilling": [],
+              "activities": [
+                {
+                  "request_id": "synthetic-dflash",
+                  "kind": "generate",
+                  "detail": "generating",
+                  "elapsed_seconds": 15,
+                  "last_activity_age_seconds": 0.1,
+                  "token_count": 1e+20
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expected": {
+        "phase": "processing",
+        "rate": null,
+        "output": null,
+        "progress": null
+      }
+    },
+    {
+      "name": "Other activity counter is not generated output",
+      "activity": {
+        "active_models": {
+          "models": [
+            {
+              "id": "fixture-dflash",
+              "active_requests": 1,
+              "waiting_requests": 0,
+              "generating": [],
+              "prefilling": [],
+              "activities": [
+                {
+                  "request_id": "synthetic-dflash",
+                  "kind": "embedding",
+                  "detail": "generating",
+                  "elapsed_seconds": 15,
+                  "last_activity_age_seconds": 0.1,
+                  "token_count": 64
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expected": {
+        "phase": "processing",
+        "rate": null,
+        "output": null
+      }
+    },
+    {
+      "name": "DFlash and another activity stay separate",
+      "activity": {
+        "active_models": {
+          "models": [
+            {
+              "id": "fixture-dflash",
+              "active_requests": 2,
+              "waiting_requests": 0,
+              "generating": [],
+              "prefilling": [],
+              "activities": [
+                {
+                  "request_id": "synthetic-dflash",
+                  "kind": "generate",
+                  "detail": "generating",
+                  "elapsed_seconds": 15,
+                  "last_activity_age_seconds": 0.1,
+                  "token_count": 64
+                },
+                {
+                  "request_id": "synthetic-other",
+                  "kind": "generate",
+                  "detail": "generating",
+                  "elapsed_seconds": 15,
+                  "last_activity_age_seconds": 0.1,
+                  "token_count": 64
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expected": {
+        "phase": "processing",
+        "rate": null,
+        "output": null
+      }
+    },
+    {
+      "name": "DFlash standard fallback prefill",
+      "activity": {
+        "active_models": {
+          "models": [
+            {
+              "id": "fixture-dflash",
+              "active_requests": 1,
+              "waiting_requests": 0,
+              "generating": [],
+              "prefilling": [
+                {
+                  "request_id": "synthetic-fallback",
+                  "processed": 1000,
+                  "total": 4000,
+                  "speed": 250,
+                  "eta": 12
+                }
+              ],
+              "activities": [],
+              "dflash": {
+                "speculation": {
+                  "last": {
+                    "generation_tokens": 999,
+                    "acceptance_ratio": 0.7
+                  },
+                  "totals": {
+                    "generation_tokens": 9999
+                  }
+                },
+                "pairing_warning": null
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "phase": "prefill",
+        "rate": 250,
+        "output": null,
+        "progress": 0.25,
+        "eta": 12
+      }
+    },
+    {
+      "name": "DFlash standard fallback generation",
+      "activity": {
+        "active_models": {
+          "models": [
+            {
+              "id": "fixture-dflash",
+              "active_requests": 1,
+              "waiting_requests": 0,
+              "generating": [
+                {
+                  "request_id": "synthetic-fallback",
+                  "generated_tokens": 100,
+                  "elapsed_seconds": 4,
+                  "tokens_per_second": 25,
+                  "last_activity_age_seconds": 0.1
+                }
+              ],
+              "prefilling": [],
+              "activities": [],
+              "dflash": {
+                "speculation": {
+                  "last": {
+                    "generation_tokens": 999,
+                    "acceptance_ratio": 0.7
+                  },
+                  "totals": {
+                    "generation_tokens": 9999
+                  }
+                },
+                "pairing_warning": null
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "phase": "decode",
+        "rate": 25,
+        "output": 100,
+        "progress": null
+      }
     }
   ]
 }

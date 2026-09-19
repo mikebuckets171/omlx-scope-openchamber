@@ -24,7 +24,7 @@ must be tested separately on the intended installation.
 
 | Reading or behavior | Extension | Mac companion |
 | --- | --- | --- |
-| Prefill percentage, stage counters, reported estimate | Supported | Supported, including menu bar |
+| Reported prefill percentage, stage counters, estimate | Supported when the engine reports them | Supported, including menu bar |
 | Request-average generation speed; stale output detection | Supported | Supported |
 | Input reuse proven by the same request's cache lookup | Supported | Supported |
 | Prompt plus output against the model context limit | Supported | Supported; optional limit read at most once a minute |
@@ -34,7 +34,8 @@ must be tested separately on the intended installation.
 | Process footprint, model allocation and physical cache storage | Kept separate | Kept separate |
 | Host CPU, memory and swap | OpenChamber server's machine | The Mac running Scope |
 | Host thermal state and power information | Not exposed | Public macOS APIs |
-| Recent counter-based speed, saved chart readings, comparison captures | Supported | Not duplicated in the companion |
+| Recent output speed when no request average is reported | Supported | Supported, including menu bar |
+| Saved chart inspection and comparison captures | Supported | Not duplicated in the companion |
 | Multi-model roster | Supported | Current model summary |
 | OpenChamber theme and draft sharing | Supported | Not applicable to a native companion |
 
@@ -48,6 +49,31 @@ The values are synthetic and exercise valid, missing, stale, malformed, concurre
 and request-mismatched data. Shared JSONC cases verify comments, trailing commas,
 quoted text and rejection of malformed configuration. The Swift tests read these
 fixtures from the source checkout; no fixture or test runner ships in the app.
+
+## DFlash
+
+Reviewed the [primary DFlash engine](https://github.com/jundot/omlx/blob/1d7826185c5b5b69b38b27cbe57d7597b7551fd7/omlx/engine/dflash.py),
+[activity reporting](https://github.com/jundot/omlx/blob/1d7826185c5b5b69b38b27cbe57d7597b7551fd7/omlx/engine/base.py),
+and [dashboard response builder](https://github.com/jundot/omlx/blob/1d7826185c5b5b69b38b27cbe57d7597b7551fd7/omlx/admin/routes.py)
+in oMLX 0.6.4.
+
+Both Scope clients handle primary-engine activity counters and the standard
+scheduler fallback. During primary generation, output-token counts produce a
+clearly labelled **recent output** speed after enough fresh samples arrive.
+A retained summary is not treated as evidence that speculative decoding is still
+active. Concurrent requests are not combined into a per-request rate.
+
+The primary engine does **not** expose live prefill stage counters through these
+endpoints. Before output arrives, Scope shows **Working** or **Processing** rather
+than inventing prefill percentage. The normal prefill percentage and estimate
+remain available when the standard fallback supplies them. Request-average speed,
+input reuse, context headroom and speculative acceptance are not guessed.
+
+Shared fixtures cover primary preparation, output, stale activity, invalid or
+missing counters, concurrent requests, and fallback prefill/generation. Client,
+packaged-service, browser and native view tests cover their transitions. These
+checks validate monitoring behavior; they do not run a DFlash model or prove its
+inference performance on a user's machine.
 
 ## Connection and permission behavior
 
@@ -83,12 +109,6 @@ a Turn Stats row-contribution hook nor a reliable mapping between a runtime
 request and a completed chat turn. Scope does not patch that interface, scrape
 conversation messages, or label server-wide observations as a particular turn.
 The newer background-action API is not needed for passive monitoring.
-
-DFlash activity in the reviewed release can use the engine's generic activity
-records rather than the scheduler's prefill/generation records. Scope shows that
-work as processing; it does not invent prefill percentages, acceptance rates, or
-per-request speed from unrelated session totals. Lightning MTP readings use the
-same validated activity counters when the runtime provides them.
 
 Model loading, inference settings, benchmarks, cache clearing, and speculative-
 decoding controls stay in oMLX. Scope is a read-only monitor, not a second runtime
