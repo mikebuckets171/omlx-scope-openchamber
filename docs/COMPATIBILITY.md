@@ -84,6 +84,12 @@ request and a completed chat turn. Scope does not patch that interface, scrape
 conversation messages, or label server-wide observations as a particular turn.
 The newer background-action API is not needed for passive monitoring.
 
+DFlash activity in the reviewed release can use the engine's generic activity
+records rather than the scheduler's prefill/generation records. Scope shows that
+work as processing; it does not invent prefill percentages, acceptance rates, or
+per-request speed from unrelated session totals. Lightning MTP readings use the
+same validated activity counters when the runtime provides them.
+
 Model loading, inference settings, benchmarks, cache clearing, and speculative-
 decoding controls stay in oMLX. Scope is a read-only monitor, not a second runtime
 control panel. It makes no changes to the installed OpenChamber or oMLX source.

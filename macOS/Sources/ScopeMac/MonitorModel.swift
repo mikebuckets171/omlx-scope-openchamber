@@ -198,10 +198,14 @@ public final class MonitorModel {
                 key = entered; credentialSource = rememberInKeychain ? "Keychain" : "This launch only"
                 defaults.set(rememberInKeychain ? "keychain" : "session", forKey: "credentialPreference")
                 needsKeychainAccess = false
+            } else if key.isEmpty && !needsKeychainAccess {
+                // An explicit key-free connection must survive later discovery failures.
+                credentialSource = "No API key"
+                defaults.set("none", forKey: "credentialPreference")
             }
             endpoint = parsed.url.absoluteString; defaults.set(endpoint, forKey: "endpoint")
             configurationProblem = nil
-            settingsMessage = entered.isEmpty ? "Connection saved. Your current key was kept."
+            settingsMessage = entered.isEmpty ? (key.isEmpty ? "Connection saved. No API key is in use." : "Connection saved. Your current key was kept.")
                 : rememberInKeychain ? "Key saved in Keychain. Opening it on a future launch is your choice."
                 : "Key applied for this launch. It is not saved to disk."
             connectionChanged()
