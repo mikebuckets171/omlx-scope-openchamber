@@ -67,11 +67,6 @@ test('native read fails closed for a nonexistent binary', async () => {
   expect(await readNative('/does-not-exist/omlx-scope', [])).toBeNull();
 });
 
-// This exercises actual read-only system commands in the macOS CI job. No user
-// machine or model is required; platform-neutral tests above remain deterministic.
-test.skipIf(process.platform !== 'darwin')('macOS native smoke: real VM page size and swap are parseable', async () => {
-  const snapshot = await new MacMemorySampler().sample();
-  expect(snapshot.wiredGB).not.toBeNull();
-  expect(snapshot.compressedGB).not.toBeNull();
-  expect(snapshot.swapUsedGB).not.toBeNull();
-});
+// Real macOS command reads are verified by scripts/smoke-service.mjs through
+// the extracted Node service, matching OpenChamber's host runtime. The parser
+// and bounded-reader behavior above remain independently tested under Bun.

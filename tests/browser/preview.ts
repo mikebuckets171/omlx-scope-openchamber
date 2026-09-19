@@ -639,7 +639,15 @@ test('DFlash shows observed output, never invents a request average or prefill p
   await expect(frame.locator('#prefill-progress')).toBeHidden();
   await expect(frame.locator('#reuse')).toHaveText('—');
   await frame.locator('#pause').click();
-  await expect(frame.locator('#rate')).toHaveText('Paused');
+  await expect(frame.locator('#connection')).toHaveText('Monitoring paused');
+  await expect(frame.locator('#phase')).toHaveText('Paused');
+  await expect(frame.locator('#unit')).toHaveText('Frozen observation');
+  const frozenRate = await frame.locator('#rate').textContent();
+  expect(frozenRate).toMatch(/[0-9]/);
+  const pausedRequests = await requests(page);
+  await page.waitForTimeout(1_000);
+  await expect(frame.locator('#rate')).toHaveText(frozenRate!);
+  expect(await requests(page)).toBe(pausedRequests);
   await frame.locator('#pause').click();
   await expect(frame.locator('#unit')).toContainText('recent output');
   await page.screenshot({path:info.outputPath('dflash-observed.png'),fullPage:true});

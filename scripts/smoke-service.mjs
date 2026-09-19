@@ -52,6 +52,17 @@ async function stop(state) {
   }
 }
 
+function assertHostReadings(snapshot) {
+  assert(snapshot.system && typeof snapshot.system === 'object', 'Host readings must survive unavailable oMLX.');
+  if (process.platform !== 'darwin') return;
+  const readings = snapshot.system.macOS;
+  assert(readings, 'The packaged Node service must return native Mac readings.');
+  for (const key of ['wiredGB', 'compressedGB', 'swapUsedGB']) {
+    assert.equal(typeof readings[key], 'number', `${key} was not read from macOS.`);
+    assert(Number.isFinite(readings[key]) && readings[key] >= 0, `${key} must be finite and nonnegative.`);
+  }
+}
+
 async function unusedPort() {
   const probe = createServer();
   await new Promise((resolveListen, reject) => {
@@ -100,7 +111,7 @@ try {
   assert.equal(snapshot.available, false);
   assert.equal(snapshot.reason, 'runtime_unreachable');
   assert.equal(snapshot.message, 'The oMLX runtime did not answer.', 'JSONC must parse the configured endpoint before attempting health identification.');
-  assert(snapshot.system && typeof snapshot.system === 'object', 'Host readings must survive unavailable oMLX.');
+  assertHostReadings(snapshot);
 
   // A real bind failure must exit and retain its actionable cause in stderr.
   const collision = start(port);
@@ -139,6 +150,7 @@ try {
   assert(ready, `Packaged service did not restart: ${activeService.log}`);
   const activeSnapshot = await (await get('/snapshot')).json();
   assert.equal(activeSnapshot.available, true);
+  assertHostReadings(activeSnapshot);
   assert.equal(activeSnapshot.prefillProgress, 0.64);
   assert.equal(activeSnapshot.prefillETASeconds, 0.2);
   assert.equal(activeSnapshot.residentModelCount, 1);
@@ -173,6 +185,27 @@ try {
   assert.equal(fallback.prefillProgress, 0.25);
   assert.notEqual(fallback.traceEpoch, dflash.traceEpoch);
   await stop(activeService);
+  // Five additional fresh processes exercise real command completion under
+  // Node. These are independent reads, not retries: the first failure stops
+  // verification. The production 1.5-second deadline remains unchanged.
+  if (process.platform === 'darwin') {
+    for (let i = 0; i < 5; i++) {
+      const fresh = start(port);
+      let ready = false;
+      const deadline = performance.now() + 5_000;
+      while (performance.now() < deadline && !fresh.closed) {
+        try { ready = (await get('/health')).status === 200; if (ready) break; } catch {}
+        await delay(25);
+      }
+      assert(ready, `Native-resource test process did not start: ${fresh.log}`);
+      const response = await get('/snapshot');
+      assert.equal(response.status, 200);
+      assertHostReadings(await response.json());
+      await stop(fresh);
+      assert.equal(fresh.result.code, 0);
+    }
+    console.log('PASS: seven fresh packaged Node processes returned real macOS wired, compressed, and swap readings.');
+  }
   console.log('PASS: packaged DFlash output and fallback transition use reported counters without inventing speed or prefill.');
   console.log('PASS: packaged prefill counters and invalid-progress rejection verified against loopback fixture.');
   console.log('PASS: packaged Node service starts without node_modules; /health, /snapshot, JSONC, authentication, startup errors, and shutdown verified.');
