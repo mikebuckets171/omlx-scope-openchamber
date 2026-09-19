@@ -22,6 +22,8 @@ func renderPreviews() async throws {
     host.swapBytes = 1.2 * 1_073_741_824; host.thermal = "Nominal"
     host.batteryPercent = 92; host.powerSource = "Power adapter"
     let model = MonitorModel(preview: true)
+    // Render only. Do not start update checks or inject a fake installed version.
+    let updates = UpdateController()
     let rates: [Double?] = (0..<90).map { i in
         let wave = sin(Double(i) / 8.0)
         let ripple = cos(Double(i) / 3.0) * 0.4
@@ -87,6 +89,8 @@ func renderPreviews() async throws {
         try await export(MonitorView(model: model).frame(width: 1050, height: 780), name: "workspace-\(theme)", width: 1050, scheme: scheme)
         try await export(MenuPopover(model: model), name: "menu-\(theme)", width: 345, scheme: scheme)
         try await export(ResourcesContent(model: model).padding(28).frame(width: 850), name: "resources-\(theme)", width: 850, scheme: scheme)
+        try await export(UpdatesView(updates: updates), name: "updates-\(theme)", width: 460, scheme: scheme)
+        try await export(SettingsView(model: model, updates: updates).frame(height: 820), name: "settings-\(theme)", width: 560, scheme: scheme)
         var prefill = runtime
         prefill.phase = .prefill; prefill.rate = 240; prefill.progress = 0.64
         prefill.prefillProcessed = 5824; prefill.prefillTotal = 9100; prefill.prefillETA = 13.65
