@@ -12,6 +12,12 @@ in the private report. Only the latest published version receives fixes.
 
 ## Security boundaries
 
+The extension panel is sandboxed by OpenChamber. Its approved local service is
+not: it runs under the same user account as OpenChamber and can read the saved
+oMLX credential. The listed commands describe intended use, not an OS-level
+sandbox or a guarantee that third-party code cannot access other local files.
+Review the source and install only releases you trust.
+
 - Runtime monitoring is loopback-only, bounded, and read-only. Dashboard reads
   use the local oMLX login; health identification happens before credentials are sent.
   Redirects are rejected before credentials can be forwarded.
@@ -37,6 +43,6 @@ archives and feeds. Sparkle is pinned and its binary checksum is verified by
 SwiftPM. Automatic installation is compiled out of preview builds. Feed-signature
 failures do not expire in the signed build policy.
 
-See [Release process](docs/RELEASING.md). Signing/notarization reduce distribution
+See [Release process](https://github.com/mikebuckets171/omlx-scope-openchamber/blob/main/docs/RELEASING.md). Signing/notarization reduce distribution
 risk; they do not prove the absence of vulnerabilities. Automated fixture tests
 are not a substitute for an independent security audit or live release testing.

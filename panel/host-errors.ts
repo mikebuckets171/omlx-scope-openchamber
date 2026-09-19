@@ -12,7 +12,7 @@ const diagnosticForCode = (code: string): Diagnostic => {
       return { reason: 'host_disconnected', message: 'OpenChamber disconnected this extension. Reopen the panel to reconnect.' };
     case 'DISABLED':
     case 'NOT_GRANTED':
-      return { reason: 'service_not_granted', message: 'Approve the local service capability in OpenChamber extension settings.' };
+      return { reason: 'service_not_granted', message: 'Approve the extension’s local service in Settings → Extensions.' };
     case 'NO_SERVICE':
     case 'SERVICE_FAILED':
       return { reason: 'service_failed', message: 'The OMLX Scope service is stopped or failed. Reopen the extension or check its approval.' };

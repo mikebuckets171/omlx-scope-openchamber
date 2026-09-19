@@ -1,5 +1,5 @@
 import { parse, type ParseError } from 'jsonc-parser/lib/esm/main.js';
-import { readFile } from 'node:fs/promises';
+import { open } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 
@@ -83,7 +83,20 @@ const readJson = async (path: string, readText: (path: string) => Promise<ReadTe
 
 const defaultReadText = async (path: string): Promise<ReadTextResult> => {
   try {
-    return { kind: 'ok', text: await readFile(path, 'utf8') };
+    const handle = await open(path, 'r');
+    try {
+      const limit = 1_000_000;
+      const stat = await handle.stat();
+      if (!stat.isFile() || stat.size > limit) return { kind: 'unreadable' };
+      const buffer = Buffer.alloc(stat.size + 1);
+      let offset = 0;
+      while (offset < buffer.length) {
+        const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, null);
+        if (!bytesRead) break;
+        offset += bytesRead;
+      }
+      return offset !== stat.size ? { kind: 'unreadable' } : { kind: 'ok', text: buffer.toString('utf8', 0, offset) };
+    } finally { await handle.close(); }
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === 'ENOENT'
       ? { kind: 'missing' }
@@ -111,14 +124,14 @@ export const pathsForHome = (home: string, env: NodeJS.ProcessEnv = {}): ConfigP
  */
 export const parseLoopbackOrigin = (value: unknown, stripPath = false): URL | null => {
   const candidate = nonempty(value);
-  if (candidate === null) return null;
+  if (candidate === null || !/^http:\/\/127\.0\.0\.1:[0-9]{1,5}(?:\/v1\/?)?\/?$/.test(candidate)) return null;
   let url: URL;
   try {
     url = new URL(candidate);
   } catch {
     return null;
   }
-  if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.port.length === 0) return null;
+  if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.port.length === 0 || Number(url.port) < 1) return null;
   if (url.username || url.password || url.search || url.hash) return null;
   if (url.pathname !== '' && url.pathname !== '/' && (!stripPath || !['/v1', '/v1/'].includes(url.pathname))) return null;
   url.pathname = '/';

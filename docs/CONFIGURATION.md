@@ -11,7 +11,8 @@ The approved service reads these files on the computer running OpenChamber:
 | `~/.omlx/settings.json` | oMLX host and port fallback |
 | `~/.local/share/opencode/auth.json` | Saved oMLX API credential |
 
-JSONC is merged after JSON. An unreadable or malformed explicit configuration
+Each local file is limited to 1 MB. Oversized, non-file, or changing files are
+reported as unreadable rather than loaded without a bound. JSONC is merged after JSON. An unreadable or malformed explicit configuration
 does not silently switch the monitor to another endpoint. The provider key is
 `omlx`, its URL is `provider.omlx.options.baseURL`, and saved credentials use
 `omlx.type: "api"` with `omlx.key`.
@@ -26,6 +27,11 @@ complete configuration resolver. A different provider name or configuration
 source may need an explicit supported setup before discovery works.
 
 ## Troubleshooting
+
+Open **Connection help** at the bottom of the monitor. **Check connection** asks
+OpenChamber whether its extension service is starting, running, stopped, or failed.
+A running extension service does not by itself mean oMLX is connected. The check
+runs only when clicked and does not change settings or restart either app.
 
 **No connection:** confirm that oMLX is running on the OpenChamber host and
 that the provider points at its numeric loopback URL.
@@ -43,9 +49,6 @@ with fixed arguments, bounded output, and a timeout. Failed readings show `—`.
 **Missing session statistics:** live activity can remain available while the
 statistics endpoint is unavailable. Older totals are labelled rather than
 presented as current.
-
-**Upgrading a pre-0.3 installation:** remove the old extension entry before
-adding OMLX Scope; those versions used a different extension ID.
 
 ## Development overrides
 

@@ -13,6 +13,8 @@ import { InsightView } from './insights-view.ts';
 import { CaptureView, captureMarkup } from './capture-view.ts';
 import { SharingControls } from './openchamber-view.ts';
 import { contextBudget } from './context.ts';
+import { ChartInspector } from './chart-inspector.ts';
+import { ConnectionHelp } from './connection-help.ts';
 import { version } from '../package.json';
 
 const host = connectHost();
@@ -24,7 +26,7 @@ root.innerHTML = `
 <main class="scope" aria-labelledby="scope-title">
   <header class="masthead">
     <div class="brand"><svg class="scope-mark" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="11"/><path d="M3 14h6l3-5 4 10 3-5h6"/></svg><h1 id="scope-title">OMLX <span>Scope</span></h1></div>
-    <div class="monitor-controls"><button id="efficiency" type="button" aria-label="Energy-saving updates" aria-pressed="false" title="Energy-saving updates: reduce monitoring refresh frequency"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 3c-8-1-13 3-10 9s10 1 10-9ZM4 16l8-8"/></svg></button><button id="pause" type="button" aria-pressed="false" title="Pause this monitor, not inference"><svg viewBox="0 0 20 20" aria-hidden="true"><path id="pause-symbol" d="M7 5v10M13 5v10"/></svg><span id="pause-label">Pause</span></button><button id="refresh" type="button" title="Refresh local telemetry" aria-label="Refresh local telemetry"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 7a6 6 0 1 0 .1 5M16 3v4h-4"/></svg></button></div>
+    <div class="monitor-controls"><button id="efficiency" type="button" aria-label="Energy-saving updates" aria-pressed="false" title="Energy-saving updates: reduce monitoring refresh frequency"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 3c-8-1-13 3-10 9s10 1 10-9ZM4 16l8-8"/></svg></button><button id="pause" type="button" aria-pressed="false" title="Pause this monitor, not inference"><svg viewBox="0 0 20 20" aria-hidden="true"><path id="pause-symbol" d="M7 5v10M13 5v10"/></svg><span id="pause-label">Pause</span></button><button id="refresh" type="button" title="Refresh readings" aria-label="Refresh readings" disabled><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 7a6 6 0 1 0 .1 5M16 3v4h-4"/></svg></button></div>
   </header>
   <div class="connection"><span class="connection-dot" aria-hidden="true"></span><span id="connection" role="status">Connecting to oMLX</span><span class="local-tag">Local · read-only</span></div>
   <div class="view-tools" aria-label="Monitor view options"><button id="compact" type="button" aria-pressed="false">Compact view</button><span id="cadence">Adaptive updates</span><div id="share-actions" class="share-actions" aria-label="Share readings"></div></div>
@@ -32,10 +34,10 @@ root.innerHTML = `
   <p id="notice" class="notice" role="status" hidden></p>
   <div class="workspace">
   <section class="instrument" aria-label="Inference activity">
-    <div class="model-line"><span class="eyebrow">INFERENCE</span><span id="phase" class="phase">Connecting</span></div>
+    <div class="model-line"><span class="eyebrow">MODEL ACTIVITY</span><span id="phase" class="phase">Connecting</span></div>
     <h2 id="model" translate="no">Your local model</h2>
-    <div class="readout"><span id="rate" class="rate">—</span><span id="unit" class="unit">Waiting for telemetry</span></div>
-    <p id="activity" class="activity">Verifying the approved local service.</p>
+    <div class="readout"><span id="rate" class="rate">—</span><span id="unit" class="unit">Waiting for readings</span></div>
+    <p id="activity" class="activity">Connecting through OpenChamber.</p>
     <section id="prefill-progress" class="prefill-progress" aria-label="Prefill progress" hidden>
       <div class="prefill-heading"><span>Prefill · current stage</span><span id="prefill-state">Live reading</span></div>
       <div class="prefill-values"><strong id="prefill-remaining">—</strong><span id="prefill-completed">—</span></div>
@@ -46,23 +48,23 @@ root.innerHTML = `
     <div id="recent-speed" class="recent-speed" hidden><strong id="window-speed">—</strong><span id="window-span">Recent generation speed</span></div>
     <p id="request-output" class="request-output" hidden></p>
     <div id="context-headroom" class="context-headroom" hidden title="Reported prompt plus output against the model context limit. This is not OpenCode's compaction threshold or reserved output budget."><span>MODEL CONTEXT</span><strong id="context-remaining">—</strong><small id="context-accounted">Not reported</small></div>
-    <figure id="signal" class="signal" role="img" aria-label="No observed throughput yet">
+    <figure id="signal" class="signal" aria-label="No observed throughput yet">
       <div class="chart-top"><span id="chart-title">Request throughput</span><span id="ceiling">tok/s</span></div>
-      <div class="plot"><svg viewBox="0 0 600 120" preserveAspectRatio="none" aria-hidden="true"><path class="grid" d="M4 4H596 M4 60H596 M4 116H596"/><g id="trace"></g><circle id="cursor" r="3" hidden/></svg><span id="chart-empty">The next request starts here.</span></div>
+      <div id="history-inspector" class="plot" role="slider" tabindex="-1" aria-orientation="horizontal" aria-describedby="history-reading" aria-label="Inspect throughput history" aria-valuemin="0" aria-valuemax="0" aria-disabled="true"><svg viewBox="0 0 600 120" preserveAspectRatio="none" aria-hidden="true"><path class="grid" d="M4 4H596 M4 60H596 M4 116H596"/><g id="trace"></g><circle id="cursor" r="3" hidden/><line id="inspect-line" y1="4" y2="116" hidden/><circle id="inspect-dot" r="4" hidden/></svg><span id="chart-empty">The next request starts here.</span></div>
       <figcaption><span>−90s</span><span id="chart-state">Observed samples only</span><span id="chart-end">now</span></figcaption>
-    </figure>
+    <p id="history-reading" class="history-reading">History appears as readings arrive</p></figure>
     <div class="metrics" aria-label="Current request">
-      <div><span class="metric-label">Context</span><strong id="context">—</strong><span id="context-detail" class="metric-detail">Not reported</span><div class="meter" aria-hidden="true"><i id="context-bar"></i></div></div>
-      <div><span class="metric-label">Prefix reused</span><strong id="reuse">—</strong><span id="reuse-detail" class="metric-detail">Not reported</span><div class="meter" aria-hidden="true"><i id="reuse-bar"></i></div></div>
+      <div><span class="metric-label" title="Input tokens as a share of the model context limit">Input context</span><strong id="context">—</strong><span id="context-detail" class="metric-detail">Not reported</span><div class="meter" aria-hidden="true"><i id="context-bar"></i></div></div>
+      <div><span class="metric-label">Input reused</span><strong id="reuse">—</strong><span id="reuse-detail" class="metric-detail">Not reported</span><div class="meter" aria-hidden="true"><i id="reuse-bar"></i></div></div>
       <div><span class="metric-label">Requests</span><strong id="requests">—</strong><span id="queue" class="metric-detail">Waiting for oMLX</span></div>
     </div>
     ${captureMarkup}
     <section id="recent-generations" class="insight-section" aria-labelledby="recent-title">
       <div class="section-heading"><h2 id="recent-title">Recent generations</h2><span id="recent-count">0 / 8</span></div>
-      <p class="insight-note">Last-seen request averages · not final results</p>
-      <ol id="recent-list" class="recent-list"><li class="insight-note">Generations appear here after they leave the active view.</li></ol>
+      <p class="insight-note">Last observed readings · not completion records</p>
+      <ol id="recent-list" class="recent-list"><li class="insight-note">Your next generation will appear here when it leaves the active view.</li></ol>
       <div class="insight-actions"><button id="copy-recent" type="button" disabled>Copy recent</button><button id="clear-recent" type="button" disabled title="Clear this view’s observation history, not runtime statistics">Clear history</button></div>
-      <p class="insight-note">Only observed while this view is open. Gaps and aborted requests are not treated as successful completions. Held in memory, not saved to disk.</p>
+      <p class="insight-note">Kept only while this view is open. A request leaving the view does not confirm completion.</p>
     </section>
   </section>
   <aside class="side-stack" aria-label="Host resources and server statistics">
@@ -107,7 +109,8 @@ root.innerHTML = `
     <div><dt>Last cache lookup</dt><dd id="cache-lookup">—</dd></div>
   </dl><p class="explanation">Generation is the active request’s reported average; prefill is the runtime’s reported progress speed. Session averages cover completed work across models. Runtime memory guard is not macOS memory pressure. Memory uses GiB (1,024³ bytes). Compressed is physical compressor storage. Missing measurements stay unavailable.</p></details>
   </aside></div>
-  <footer><span>Independent oMLX monitor</span><span id="freshness">Waiting for first sample</span></footer>
+  <details class="connection-help" id="connection-help"><summary>Connection help<span aria-hidden="true">+</span></summary><p id="connection-result" role="status">Check whether OpenChamber has started the extension service. This does not change your configuration.</p><div class="insight-actions"><button id="check-connection" type="button">Check connection</button><button id="connection-guide" type="button">Setup guide</button></div></details>
+  <footer><span>OMLX Scope <span id="scope-version"></span></span><span id="freshness">Waiting for first sample</span></footer>
 </main>`;
 
 const nodes = new Map<string, HTMLElement>();
@@ -120,6 +123,9 @@ const button = node('refresh') as HTMLButtonElement;
 const shell = root.querySelector<HTMLElement>('.scope')!;
 const signal = new SignalHistory();
 const resources = new ResourceHistory();
+const inspector = new ChartInspector(node('history-inspector'), node('history-reading'));
+const connectionHelp = new ConnectionHelp(shell, host, version);
+text('scope-version', version);
 const insightView = new InsightView(root);
 const pauseButton = node('pause') as HTMLButtonElement;
 let lastSystem: SystemSnapshot | null = null;
@@ -135,6 +141,8 @@ let mounted = false;
 let disposed = false;
 let monitorGeneration = 0;
 let manualRefresh = false;
+let interrupted = false;
+let awaitingFresh = false;
 const number = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
 const rateNumber = new Intl.NumberFormat(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const compact = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 });
@@ -170,6 +178,7 @@ const drawSignal = (now: number, live: boolean, phase: TelemetryPhase): void => 
   hidden('chart-empty', points.length > 0);
   text('chart-title', tracePhase === 'prefill' ? 'Prefill · reported speed' : 'Generation · request average');
   text('ceiling', `${count(geometry.upper)} tok/s`);
+  inspector.update(points, now, geometry.upper);
   text('chart-state', points.length ? live ? 'Live observations' : 'Recent observations · not live' : 'Observed samples only');
   node('signal').dataset.live = String(live);
   node('signal').setAttribute('aria-label', points.length ? `${tracePhase} throughput over 90 seconds. ${points.length} observations. Latest ${rate(points.at(-1)?.rate)}. Gaps are not zero.` : 'No observed throughput in the last 90 seconds.');
@@ -211,7 +220,7 @@ const update = (snapshot: TelemetrySnapshot): void => {
   text('rate', liveRate !== null ? rateNumber.format(liveRate) : phase === 'idle' ? 'Ready' : phase === 'notLoaded' ? 'Standby' : '—');
   node('rate').classList.toggle('is-word', liveRate === null);
   text('unit', liveRate !== null ? 'tokens / second' : phase === 'idle' ? 'Waiting for your next request' : phase === 'notLoaded' ? 'Load a model in oMLX' : 'No fresh throughput');
-  text('activity', stale ? snapshot.message ?? 'Start oMLX on this host, then refresh.' : current.message ?? (phase === 'idle' ? 'Model resident. Nothing running.' : phase === 'notLoaded' ? 'Server is healthy. No model is resident.' : `${count(current.activeRequests)} active · ${current.queuedRequests === null ? 'queue not reported' : current.queuedRequests ? `${current.queuedRequests} queued` : 'queue clear'}`));
+  text('activity', stale ? snapshot.message ?? 'Start oMLX on this host, then refresh.' : current.message ?? (phase === 'idle' ? 'Model loaded. Ready for your next request.' : phase === 'notLoaded' ? 'oMLX is running. Load a model to begin.' : `${count(current.activeRequests)} active · ${current.queuedRequests === null ? 'queue not reported' : current.queuedRequests ? `${current.queuedRequests} queued` : 'queue clear'}`));
   text('notice', stale ? last ? `${age(last.sampledAt)}. Retained details are not live.` : 'Read-only connection · check your local oMLX endpoint and credential.' : '');
   hidden('notice', !stale);
   renderProgress(current);
@@ -273,10 +282,10 @@ const poller = new Poller(async () => {
     const response = await host.serviceRequest({ method: 'GET', path: '/snapshot' });
     const parsed = response.status === 200 ? parseTelemetrySnapshot(JSON.parse(response.body)) : unavailableForServiceResponse(response.status);
     failures = parsed.available ? 0 : failures + 1;
-    if (!disposed && generation === monitorGeneration && !userPaused && !document.hidden) { update(parsed); armFreshness(); }
+    if (!disposed && generation === monitorGeneration && !userPaused && !document.hidden) { awaitingFresh = false; update(parsed); armFreshness(); }
   } catch (error) {
     failures += 1;
-    if (!disposed && generation === monitorGeneration && !userPaused && !document.hidden) update(unavailableForHostError(error));
+    if (!disposed && generation === monitorGeneration && !userPaused && !document.hidden) { awaitingFresh = false; update(unavailableForHostError(error)); }
   } finally {
     if (manualRefresh) { button.disabled = userPaused; button.removeAttribute('aria-busy'); manualRefresh = false; }
   }
@@ -299,8 +308,24 @@ const syncMonitoring = (): void => {
   monitorGeneration += 1;
   poller.setPaused(userPaused || document.hidden);
   if (userPaused || document.hidden) {
+    interrupted = true; awaitingFresh = true;
     clearFreshness(); resources.break(); signal.break(); insightView.suspend(); captureView.suspend();
-  } else armFreshness();
+  } else {
+    if (interrupted) {
+      interrupted = false;
+      text('rate', '—'); text('unit', 'Waiting for a fresh reading');
+      text('phase', 'Refreshing'); text('connection', 'Resuming monitoring');
+      shell.dataset.stale = 'true';
+      node('machine').dataset.stale = 'true';
+      text('machine-freshness', 'Last reading · refreshing');
+      text('resource-state', 'Last readings · refreshing');
+      hidden('request-output', true);
+      renderProgress(latest.available ? latest : null, 'refreshing');
+      insightView.suspend(); captureView.suspend();
+      drawSignal(Date.now(), false, latest.phase);
+    }
+    armFreshness();
+  }
 };
 pauseButton.addEventListener('click', () => {
   userPaused = !userPaused;
@@ -309,7 +334,7 @@ pauseButton.addEventListener('click', () => {
   pauseButton.title = userPaused ? 'Resume monitoring' : 'Pause this monitor, not inference';
   text('pause-label', userPaused ? 'Resume' : 'Pause');
   document.getElementById('pause-symbol')!.setAttribute('d', userPaused ? 'M7 4l8 6-8 6z' : 'M7 5v10M13 5v10');
-  button.disabled = userPaused || manualRefresh;
+  button.disabled = !mounted || userPaused || manualRefresh;
   text('connection', userPaused ? 'Monitoring paused' : 'Resuming monitoring');
   text('phase', userPaused ? 'Paused' : 'Refreshing');
   text('unit', userPaused ? 'Frozen observation' : 'Waiting for a fresh observation');
@@ -332,7 +357,7 @@ const actionStatus = (message: string): void => {
   statusTimer = message ? setTimeout(() => { hidden('action-status', true); statusTimer = null; }, 8_000) : null;
 };
 const captureView = new CaptureView(shell, text => host.writeClipboard(text), actionStatus, version);
-const sharing = new SharingControls(node('share-actions'), host, () => [measurementReport(latest, lastSystem, userPaused, version), captureView.report()].filter(Boolean).join('\n\n'), actionStatus);
+const sharing = new SharingControls(node('share-actions'), host, () => [measurementReport(latest, lastSystem, userPaused || awaitingFresh, version), captureView.report()].filter(Boolean).join('\n\n'), actionStatus);
 const applyPreference = (key: PreferenceKey, value: boolean): void => {
   if (disposed) return;
   if (key === 'efficient') {
@@ -343,7 +368,10 @@ const applyPreference = (key: PreferenceKey, value: boolean): void => {
   } else {
     compactView = value; shell.dataset.compact = String(value);
     node('compact').setAttribute('aria-pressed', String(value));
-    if (!value && !userPaused) update(latest);
+    if (!value && !userPaused) {
+      if (awaitingFresh) drawSignal(Date.now(), false, latest.phase);
+      else update(latest);
+    }
   }
 };
 const savePreference = (key: PreferenceKey, value: boolean): void => {
@@ -364,21 +392,31 @@ node('copy-recent').addEventListener('click', async () => {
 });
 
 button.addEventListener('click', () => {
+  if (!mounted || disposed || userPaused || document.hidden) return;
   manualRefresh = true;
   button.disabled = true;
   button.setAttribute('aria-busy', 'true');
   void poller.refresh();
 });
+const readyDeadline = setTimeout(() => {
+  if (mounted || disposed) return;
+  text('connection', 'Waiting for OpenChamber');
+  text('activity', 'Open this monitor from the extension panel in OpenChamber.');
+  text('notice', 'If it is already open there, reload the extension in Settings → Extensions.');
+  hidden('notice', false);
+}, 6_000);
 host.onReady((ready) => {
+  clearTimeout(readyDeadline);
   applyHostReady(ready, document.documentElement);
   document.documentElement.style.colorScheme = ready.theme.mode;
   shell.dataset.surface = ready.surface;
   if (mounted) return;
   mounted = true;
+  button.disabled = userPaused;
   void preferences.load(applyPreference);
   syncMonitoring();
   poller.start();
 });
 document.addEventListener('visibilitychange', syncMonitoring);
-window.addEventListener('pagehide', (event) => { poller.stop(); clearFreshness(); resources.break(); signal.break(); insightView.suspend(); captureView.suspend(); monitorGeneration += 1; if (!event.persisted) { disposed = true; sharing.dispose(); if (statusTimer !== null) clearTimeout(statusTimer); host.dispose(); } });
+window.addEventListener('pagehide', (event) => { poller.stop(); clearFreshness(); resources.break(); signal.break(); insightView.suspend(); captureView.suspend(); monitorGeneration += 1; if (!event.persisted) { disposed = true; clearTimeout(readyDeadline); sharing.dispose(); inspector.dispose(); connectionHelp.dispose(); if (statusTimer !== null) clearTimeout(statusTimer); host.dispose(); } });
 window.addEventListener('pageshow', (event) => { if (event.persisted && mounted) { syncMonitoring(); poller.start(); } });

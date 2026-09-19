@@ -129,3 +129,34 @@ it('uses explicit environment paths and ignores relative XDG roots', () => {
   expect(pathsForHome('/tmp/scope-home', { XDG_CONFIG_HOME: 'relative' }).openCode).toBe(expected);
   expect(pathsForHome('/tmp/scope-home', { XDG_DATA_HOME: 'relative' }).auth).toBe('/tmp/scope-home/.local/share/opencode/auth.json');
 });
+
+it('rejects shorthand IPs, encoded authorities and zero ports before URL normalization', () => {
+  for (const address of ['127.1','2130706433','0x7f000001','0177.0.0.1','127.0.0.1.','%31%32%37.0.0.1']) {
+    expect(parseLoopbackOrigin(`http://${address}:8000/v1`, true)).toBeNull();
+  }
+  expect(parseLoopbackOrigin('http://127.0.0.1:0')).toBeNull();
+  expect(parseLoopbackOrigin('http://127.0.0.1:8000\\v1', true)).toBeNull();
+  expect(parseLoopbackOrigin('http://127.0.0.1:8000/v1/../', true)).toBeNull();
+});
+
+it('bounds real configuration reads without silently falling back', async () => {
+  const { mkdtemp, mkdir, writeFile, rm } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { join, dirname } = await import('node:path');
+  const home = await mkdtemp(join(tmpdir(), 'scope-config-'));
+  try {
+    const paths = pathsForHome(home);
+    await mkdir(dirname(paths.openCode), {recursive:true});
+    await mkdir(dirname(paths.omlx), {recursive:true});
+    await writeFile(paths.omlx, JSON.stringify({server:{host:'127.0.0.1',port:8000}}));
+    await writeFile(paths.openCode, JSON.stringify({provider:{omlx:{options:{baseURL:'http://127.0.0.1:8123/v1'}}}}));
+    const valid = await resolveOmlxConfig({home, env:{}});
+    expect(valid.baseURL?.port).toBe('8123');
+    await writeFile(paths.openCode, ' '.repeat(1_000_001));
+    const oversized = await resolveOmlxConfig({home, env:{}});
+    expect(oversized.baseURL).toBeNull();
+    expect(oversized.issue).toBe('unreadable_config');
+    await rm(paths.openCode); await mkdir(paths.openCode);
+    expect((await resolveOmlxConfig({home, env:{}})).issue).toBe('unreadable_config');
+  } finally { await rm(home, {recursive:true,force:true}); }
+});

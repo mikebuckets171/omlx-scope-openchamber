@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.7 — 2026-09-19
+
+- Inspect recorded throughput with the pointer or keyboard, without extra polling.
+- Check the extension connection from the monitor and open the setup guide.
+- Wait for fresh readings after returning to the panel; preserve pause and chart history.
+- Refine spacing, chart proportions, labels, and narrow-panel readability.
+- Bound local configuration reads and reject noncanonical loopback addresses.
+- Clarify installation, platform support, permissions, and contribution guidance.
+
+Mac signing status is unchanged: the companion is a preview with manual installation.
+
 ## 0.5.6 — 2026-09-18
 
 - Follow OpenChamber’s active theme, including accent colors and live theme changes.

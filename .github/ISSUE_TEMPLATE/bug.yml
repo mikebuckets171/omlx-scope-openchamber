@@ -8,7 +8,7 @@ body:
     id: version
     attributes:
       label: OMLX Scope version and component
-      placeholder: 0.5.6 extension / Mac app
+      placeholder: Extension or Mac app, and the version shown in the interface
     validations:
       required: true
   - type: input
