@@ -36,7 +36,7 @@ jobs:
                   text=text[:start]+replacement+text[end:]
               assert hashlib.sha256(text.encode()).hexdigest()==change['after'], f'Unexpected result: {name}'
               path.write_text(text)
-          reviewed={'panel/capture-view.ts':'30e64a782365e8fca545eeba94cca1338f4c2d6aa4c1853a153554e6a9e9c776','panel/reply-capture.ts':'96e2d446e49fc07047e28cefab743002f27cd6d79cff632bfd9f56d99212afe7','panel/reply-capture.test.ts':'f9496f1d86fe7ff3303b6eb9834f1b22502301150905cd78f40671d75c95a8ad','scripts/package-docs.ts':'03591d623fb204cd5d6fec3962df20f4a1ed1e78276e0f577357fb5c1e7e92da','scripts/package-docs.test.ts':'29efd7c06a865818badfe32808bfea92d18032aba43aeab14a7566a2c08dbbea'}
+          reviewed={'panel/capture-view.ts':'30e64a782365e8fca545eeba94cca1338f4c2d6aa4c1853a153554e6a9e9c776','panel/reply-capture.ts':'96e2d446e49fc07047e28cefab743002f27cd6d79cff632bfd9f56d99212afe7','panel/reply-capture.test.ts':'612988608d483305b12d56dbe5891f8bef82cc57bac3512e8f34caae74dc89af','scripts/package-docs.ts':'03591d623fb204cd5d6fec3962df20f4a1ed1e78276e0f577357fb5c1e7e92da','scripts/package-docs.test.ts':'29efd7c06a865818badfe32808bfea92d18032aba43aeab14a7566a2c08dbbea'}
           for name,digest in reviewed.items():
               assert hashlib.sha256(Path(name).read_bytes()).hexdigest()==digest, name
           PY
