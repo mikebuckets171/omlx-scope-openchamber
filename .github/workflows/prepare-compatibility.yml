@@ -1,0 +1,68 @@
+name: Prepare compatibility changes
+on:
+  push:
+    branches: [work/v0.5.8]
+    paths: [.github/workflows/prepare-compatibility.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    if: github.repository == 'mikebuckets171/omlx-scope-openchamber' && github.ref == 'refs/heads/work/v0.5.8'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+      - name: Apply reviewed source changes
+        run: |
+          set -euo pipefail
+          git diff --exit-code f2b4fd44a5c0869195a4192b8119f79e38cfc2a8 HEAD -- . ':!.github/workflows/compatibility-review.yml' ':!.github/workflows/prepare-compatibility.yml'
+          python3 - <<'PY'
+          import base64,hashlib,json,lzma,os,subprocess
+          from pathlib import Path
+          pieces=[]
+          for sha in ['40fb5ac8d54a4939ca221c60fa1bed3433c8aaa3','b92a5e4ab5f2454d8831d575e46e00e487039256','5efd8196a5bfd0ab51512cee9dc3b6c1bbac0793','b0d5be7974f45565e1eee21a651a0bd2bb29c5c5']:
+              blob=json.loads(subprocess.check_output(['gh','api',f'repos/mikebuckets171/omlx-scope-openchamber/git/blobs/{sha}']))
+              piece=base64.b64decode(blob['content'])
+              assert hashlib.sha1(b'blob '+str(len(piece)).encode()+b'\0'+piece).hexdigest()==sha
+              pieces.append(piece)
+          patch=lzma.decompress(base64.b64decode(b''.join(pieces),validate=True))
+          assert len(patch)==117424 and hashlib.sha256(patch).hexdigest()=='ce9ee7fa5c10646bb00eb88cabe92a89669ac84e9a05c46425427ad068ff1253'
+          path=Path(os.environ['RUNNER_TEMP'])/'compatibility.patch';path.write_bytes(patch)
+          subprocess.run(['git','apply','--check','--unidiff-zero',str(path)],check=True)
+          subprocess.run(['git','apply','--unidiff-zero',str(path)],check=True)
+          PY
+      - name: Build and check the installation package
+        run: bun install --frozen-lockfile && bun run check
+      - name: Confirm reproducible builds and unchanged permissions
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,subprocess
+          from pathlib import Path
+          for path,digest in {'panel/main.js':'9a98826658bb7e76eea896ac6064d2a6e5dafd98f2baeade2517ae207dff416f','service/main.js':'72e3ae4cc0b7a0d26814b2b5bd500a36d5329170bb88e8368861b0c6dfafa216'}.items():
+              assert hashlib.sha256(Path(path).read_bytes()).hexdigest()==digest,path
+          before=json.loads(subprocess.check_output(['git','show','f2b4fd44a5c0869195a4192b8119f79e38cfc2a8:package.json']))
+          after=json.loads(Path('package.json').read_text())
+          for key in ['openchamber','files','devDependencies']: assert before[key]==after[key],key
+          assert before['dependencies'].keys()==after['dependencies'].keys()
+          assert after['version']=='0.5.8' and after['dependencies']['@openchamber/sdk']=='1.24.2'
+          PY
+          git diff --exit-code -- macOS/Package.swift macOS/Package.resolved scripts/package-macos.sh scripts/distribute-macos.sh .github/workflows/ci.yml .github/workflows/release.yml
+      - name: Commit verified source and bundles
+        run: |
+          set -euo pipefail
+          git fetch origin work/v0.5.8
+          test "$(git rev-parse FETCH_HEAD)" = "$GITHUB_SHA"
+          git rm .github/workflows/compatibility-review.yml .github/workflows/prepare-compatibility.yml
+          git add -A
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Align runtime readings and make Keychain access explicit'
+          git push origin HEAD:work/v0.5.8
