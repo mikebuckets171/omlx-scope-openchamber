@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.7 — 2026-09-19
+
+- Add an optional Next reply capture, timed by the selected chat without sending a prompt.
+- Keep capture controls available in compact view while recording.
+- Simplify the monitor layout and put longer explanations in expandable help.
+- Preserve live host themes, prefill percentages, quiet sharing, and saved view choices.
+- Document how live oMLX readings differ from OpenChamber’s built-in Turn Stats.
+- Check documentation links and shipped files as part of package verification.
+
+Next reply records server-wide observations, not measurements attributed to that
+chat. OpenChamber does not currently expose a Turn Stats extension hook.
+Mac signing and update behavior are unchanged; this remains a manual-install preview.
+
 ## 0.5.6 — 2026-09-18
 
 - Follow OpenChamber’s active theme, including accent colors and live theme changes.

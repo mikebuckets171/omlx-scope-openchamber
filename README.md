@@ -16,8 +16,8 @@ oMLX’s dashboard rather than replacing it.
 
 <!-- Product screenshots use synthetic readings, never a performance claim. -->
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/mikebuckets171/omlx-scope-openchamber/releases/download/v0.5.6/extension-dark.png">
-  <img alt="OMLX Scope full-page monitor" src="https://github.com/mikebuckets171/omlx-scope-openchamber/releases/download/v0.5.6/extension-light.png">
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/mikebuckets171/omlx-scope-openchamber/releases/download/v0.5.7/extension-dark.png">
+  <img alt="OMLX Scope full-page monitor" src="https://github.com/mikebuckets171/omlx-scope-openchamber/releases/download/v0.5.7/extension-light.png">
 </picture>
 
 *Full-page extension view with sample data. The panel follows OpenChamber’s theme.*
@@ -29,7 +29,8 @@ oMLX’s dashboard rather than replacing it.
 - **Understand the workload:** cache reuse, model-context headroom, loaded models,
   CPU, memory, and swap—with unavailable or held readings clearly identified.
 - **Compare observations:** capture 30 or 60 seconds, pin a reference, then compare
-  a similar run. No benchmark prompts or extra inference are started.
+  a similar run. Or arm **Next reply** to record while the selected chat runs.
+  No prompts or extra inference are started.
 - **Stay in the conversation:** compact mode keeps the essentials close. The
   Share menu copies a measurement report or adds it to your chat draft on click.
   Nothing is sent automatically.
@@ -42,7 +43,9 @@ they are not guaranteed to belong to the selected chat.
 
 ### OpenChamber extension
 
-Requires **OpenChamber 1.24.0 or newer**, with oMLX on the same host.
+Requires **OpenChamber 1.24.0 or newer** on web or desktop, with oMLX on the same
+host. The extension API was also checked against **1.24.2**. OpenChamber mobile
+and VS Code do not load these extensions yet.
 
 In **Settings → Extensions**, add this repository and review the permissions:
 
@@ -50,14 +53,14 @@ In **Settings → Extensions**, add this repository and review the permissions:
 https://github.com/mikebuckets171/omlx-scope-openchamber
 ```
 
-Alternatively, install `omlx-scope-openchamber-0.5.6.zip` from
+Alternatively, install `omlx-scope-openchamber-0.5.7.zip` from
 [Releases](https://github.com/mikebuckets171/omlx-scope-openchamber/releases/latest).
 The installable ZIP includes the built files; the GitHub source archives are not
 extension installation packages.
 
 ### Mac companion
 
-Download `OMLX-Scope-macOS-0.5.6.zip` from the same release, quit the old app,
+Download `OMLX-Scope-macOS-0.5.7.zip` from the same release, quit the old app,
 and move **OMLX Scope.app** into Applications. Requires **Apple Silicon and
 macOS 14 or newer**. Install it separately from the extension.
 
@@ -67,8 +70,20 @@ to token speed during generation. The popover and full window show more detail.
 **Mac builds are currently ad-hoc-signed previews, not notarized.** Check for
 Updates finds new Mac releases on GitHub; optional daily checks are available.
 Automatic installation is enabled only in properly configured Developer ID
-builds. See the [Mac guide](macOS/README.md) and
-[release-signing guide](docs/RELEASING.md) for the distinction.
+builds. See the [Mac guide](https://github.com/mikebuckets171/omlx-scope-openchamber/blob/main/macOS/README.md) and
+[release-signing guide](https://github.com/mikebuckets171/omlx-scope-openchamber/blob/main/docs/RELEASING.md) for the distinction.
+
+## Works alongside Turn Stats
+
+OpenChamber’s **Turn Stats** describes a finished chat turn. OMLX Scope shows
+what the local server is doing now. Their speed readings cover different time
+intervals and should not be expected to match.
+
+**Next reply** lets you compare the same working period: select an idle chat,
+open the sidebar monitor, choose Next reply under Performance capture, then
+arm it before sending your message. Keep the panel open. It stops when the chat goes idle, but still
+measures all oMLX requests—not just that chat. The current OpenChamber API does
+not let extensions add rows to Turn Stats or read its per-turn measurements.
 
 ## Small by design
 
@@ -106,7 +121,7 @@ CI checks the extracted installation package, not just source tests, and tests t
 extension in Chromium and WebKit. Native checks run on macOS ARM64. Synthetic
 previews are separate from live OpenChamber/oMLX validation.
 
-[Architecture](docs/ARCHITECTURE.md) · [Release process](docs/RELEASING.md) ·
+[Architecture](https://github.com/mikebuckets171/omlx-scope-openchamber/blob/main/docs/ARCHITECTURE.md) · [Release process](https://github.com/mikebuckets171/omlx-scope-openchamber/blob/main/docs/RELEASING.md) ·
 [Third-party notices](THIRD_PARTY_NOTICES.md) · [MIT license](LICENSE)
 
 Independent community project; not affiliated with OpenChamber, oMLX, or Apple.
