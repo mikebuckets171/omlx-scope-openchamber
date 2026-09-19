@@ -145,3 +145,25 @@ part of the prompt and is not subtracted. Missing or contradictory counts suppre
 the readout. This is not OpenCode's configured input/output budget, compaction
 threshold, remaining reasoning allowance, or a guarantee against an allocation
 failure. The selected OpenChamber chat is metadata, not request attribution.
+
+
+## Next reply and Turn Stats
+
+Next reply is an optional capture mode. A click arms it for the selected idle
+chat. The SDK’s busy-state changes choose the start and end; only fresh oMLX
+samples after the start contribute. Replayed state and cached samples cannot
+start it twice. No prompt is sent and conversation text is not read.
+
+Keep the view open. Changing chats, hiding or pausing the monitor, connection
+loss during recording, a model change, or concurrent requests stops capture.
+It waits at most two minutes for a reply and records for up to ten minutes.
+A chat going idle is not evidence of successful completion. Last samples can
+miss final tokens. All readings remain server-wide and are held only in memory.
+
+OpenChamber 1.24.2 computes Turn Stats from its own message and tool records.
+Its extension API exposes neither those measurements nor a place to add custom
+rows. OMLX Scope does not patch that UI, read private stores, or copy host
+message history. Use both views together; their time intervals are different.
+
+Compatibility checked against the [1.24.2 SDK](https://github.com/openchamber/openchamber/tree/v1.24.2/packages/sdk)
+and [Turn Stats component](https://github.com/openchamber/openchamber/blob/v1.24.2/packages/ui/src/components/chat/work-status/WorkStatusTelemetrySection.tsx).

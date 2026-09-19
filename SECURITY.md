@@ -16,7 +16,10 @@ in the private report. Only the latest published version receives fixes.
   use the local oMLX login; health identification happens before credentials are sent.
   Redirects are rejected before credentials can be forwarded.
 - Configuration discovery reads documented local paths; the manifest requests
-  only the two fixed macOS diagnostic commands. The service requires a host-provided token on every route.
+  only the two fixed macOS diagnostic commands. The service requires a host-provided
+  token on every route. These declarations are not an operating-system sandbox:
+  the local service runs with your user account’s access, including the documented
+  credential files. Approve it only after reviewing and trusting the code.
 - Sharing is an explicit user action and cannot send a chat message. Display and
   report contracts exclude credentials and raw request content.
 - Mac update discovery uses an independent HTTPS session and validates the
@@ -37,6 +40,6 @@ archives and feeds. Sparkle is pinned and its binary checksum is verified by
 SwiftPM. Automatic installation is compiled out of preview builds. Feed-signature
 failures do not expire in the signed build policy.
 
-See [Release process](docs/RELEASING.md). Signing/notarization reduce distribution
+See [Release process](https://github.com/mikebuckets171/omlx-scope-openchamber/blob/main/docs/RELEASING.md). Signing/notarization reduce distribution
 risk; they do not prove the absence of vulnerabilities. Automated fixture tests
 are not a substitute for an independent security audit or live release testing.

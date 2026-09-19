@@ -273,3 +273,30 @@ button, summary { transition:color 120ms ease, background-color 120ms ease, bord
 .share-menu .oc-sdk-btn { width:100%; justify-content:flex-start; min-height:34px; padding:7px 10px; text-align:left; }
 .share-actions > .oc-sdk-btn[aria-expanded="true"] { background:var(--oc-hover,var(--scope-surface)); }
 .share-menu .oc-sdk-btn:focus-visible { outline-offset:-2px; }
+
+
+/* Explanations stay available without competing with live measurements. */
+.reading-help { margin-top:12px; border-top:1px solid var(--scope-line); }
+.reading-help summary { min-height:36px; font-size:11px; gap:12px; }
+.reading-help p { margin:0 0 10px; color:var(--oc-muted); font-size:11px; line-height:1.7; }
+.reading-help b { color:var(--oc-fg); font-weight:550; }
+.capture-reply-state { color:var(--scope-accent); font-size:11px; line-height:1.65; margin-top:12px; }
+.capture-card[data-active="true"] { border-color:var(--scope-accent); }
+.scope[data-compact="true"] .capture-card[data-active="true"] { display:block; margin-top:18px; padding:14px; }
+.scope[data-compact="true"] .capture-card[data-active="true"] > .insight-note,
+.scope[data-compact="true"] .capture-card[data-active="true"] .reading-help,
+.scope[data-compact="true"] .capture-card[data-active="true"] #capture-results { display:none; }
+.readout { flex-wrap:wrap; row-gap:4px; }
+.section-heading { gap:10px; }
+.insight-section .section-heading h2 { line-height:1.5; }
+#chart-empty { text-align:center; padding:12px; }
+@media (min-width:900px) {
+  .plot { height:160px; }
+  .workspace { column-gap:32px; }
+  .side-stack { padding-left:26px; }
+  .instrument { padding-top:3px; }
+  .insight-note, .metric-detail { font-size:11px; }
+  .capture-card { padding:20px; }
+  .scope[data-phase="prefill"] .signal { margin-top:24px; }
+  .reading-help p { max-width:68ch; }
+}

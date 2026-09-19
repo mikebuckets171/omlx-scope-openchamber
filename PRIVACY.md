@@ -42,3 +42,8 @@ analytics or update server.
 Copied diagnostics describe versions, measurement availability, and connection
 state. Do not attach credentials, auth files, raw runtime responses, or private
 chat screenshots to public issues. Review anything you choose to share.
+
+
+Next reply uses the selected chat’s ID and busy/idle state to time a capture.
+The ID stays in the view’s memory and is not included in reports, saved to disk,
+or sent to oMLX. It does not request conversation messages or Turn Stats data.

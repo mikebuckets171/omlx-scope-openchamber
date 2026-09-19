@@ -1,3 +1,4 @@
+import { missingPackageLinks } from './package-docs.ts';
 import { parseManifestJson } from '@openchamber/sdk/schemas';
 import { dirname, join } from 'node:path';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, utimesSync } from 'node:fs';
@@ -20,6 +21,11 @@ for (const entry of entries) {
   const file = Bun.file(join(root, entry));
   if (!await file.exists()) throw new Error(`Missing package entry: ${entry}`);
   bytes += file.size;
+}
+const shipped = new Set(entries);
+for (const entry of entries.filter(name => name.endsWith('.md'))) {
+  const missing = missingPackageLinks(entry, await Bun.file(join(root, entry)).text(), shipped);
+  if (missing.length) throw new Error(`Broken packaged documentation links in ${entry}: ${missing.join(', ')}`);
 }
 const panel = await Bun.file(join(root, 'panel/main.js')).text();
 if (['node:os', 'node:fs', 'node:child_process', 'OMLX_SCOPE_API_KEY', '/usr/bin/vm_stat', '/usr/sbin/sysctl'].some((secret) => panel.includes(secret))) throw new Error('Host-only code leaked into the panel');
@@ -57,5 +63,5 @@ try {
     if (!Buffer.from(original).equals(Buffer.from(copy))) throw new Error(`ZIP content mismatch: ${name}`);
   }
   process.stdout.write(command('node', [join(root, 'scripts/smoke-service.mjs'), extracted], extracted, 20_000));
-  console.log(`PASS: SDK manifest, ${names.length} assets, ${(bytes / 1024).toFixed(1)} KiB; ZIP entries and extracted bytes verified; browser boundary clean.`);
+  console.log(`PASS: SDK manifest, ${names.length} assets, ${(bytes / 1024).toFixed(1)} KiB; ZIP entries and extracted bytes verified; documentation links and browser boundary clean.`);
 } finally { rmSync(stage, { recursive: true, force: true }); }

@@ -24,7 +24,7 @@ root.innerHTML = `
 <main class="scope" aria-labelledby="scope-title">
   <header class="masthead">
     <div class="brand"><svg class="scope-mark" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="11"/><path d="M3 14h6l3-5 4 10 3-5h6"/></svg><h1 id="scope-title">OMLX <span>Scope</span></h1></div>
-    <div class="monitor-controls"><button id="efficiency" type="button" aria-label="Energy-saving updates" aria-pressed="false" title="Energy-saving updates: reduce monitoring refresh frequency"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 3c-8-1-13 3-10 9s10 1 10-9ZM4 16l8-8"/></svg></button><button id="pause" type="button" aria-pressed="false" title="Pause this monitor, not inference"><svg viewBox="0 0 20 20" aria-hidden="true"><path id="pause-symbol" d="M7 5v10M13 5v10"/></svg><span id="pause-label">Pause</span></button><button id="refresh" type="button" title="Refresh local telemetry" aria-label="Refresh local telemetry"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 7a6 6 0 1 0 .1 5M16 3v4h-4"/></svg></button></div>
+    <div class="monitor-controls"><button id="efficiency" type="button" aria-label="Energy-saving updates" aria-pressed="false" title="Energy-saving updates: reduce monitoring refresh frequency"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 3c-8-1-13 3-10 9s10 1 10-9ZM4 16l8-8"/></svg></button><button id="pause" type="button" aria-pressed="false" title="Pause this monitor, not inference"><svg viewBox="0 0 20 20" aria-hidden="true"><path id="pause-symbol" d="M7 5v10M13 5v10"/></svg><span id="pause-label">Pause</span></button><button id="refresh" type="button" title="Refresh readings" aria-label="Refresh readings"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 7a6 6 0 1 0 .1 5M16 3v4h-4"/></svg></button></div>
   </header>
   <div class="connection"><span class="connection-dot" aria-hidden="true"></span><span id="connection" role="status">Connecting to oMLX</span><span class="local-tag">Local · read-only</span></div>
   <div class="view-tools" aria-label="Monitor view options"><button id="compact" type="button" aria-pressed="false">Compact view</button><span id="cadence">Adaptive updates</span><div id="share-actions" class="share-actions" aria-label="Share readings"></div></div>
@@ -34,8 +34,8 @@ root.innerHTML = `
   <section class="instrument" aria-label="Inference activity">
     <div class="model-line"><span class="eyebrow">INFERENCE</span><span id="phase" class="phase">Connecting</span></div>
     <h2 id="model" translate="no">Your local model</h2>
-    <div class="readout"><span id="rate" class="rate">—</span><span id="unit" class="unit">Waiting for telemetry</span></div>
-    <p id="activity" class="activity">Verifying the approved local service.</p>
+    <div class="readout"><span id="rate" class="rate">—</span><span id="unit" class="unit">Waiting for readings</span></div>
+    <p id="activity" class="activity">Connecting to your local monitor.</p>
     <section id="prefill-progress" class="prefill-progress" aria-label="Prefill progress" hidden>
       <div class="prefill-heading"><span>Prefill · current stage</span><span id="prefill-state">Live reading</span></div>
       <div class="prefill-values"><strong id="prefill-remaining">—</strong><span id="prefill-completed">—</span></div>
@@ -45,7 +45,7 @@ root.innerHTML = `
     </section>
     <div id="recent-speed" class="recent-speed" hidden><strong id="window-speed">—</strong><span id="window-span">Recent generation speed</span></div>
     <p id="request-output" class="request-output" hidden></p>
-    <div id="context-headroom" class="context-headroom" hidden title="Reported prompt plus output against the model context limit. This is not OpenCode's compaction threshold or reserved output budget."><span>MODEL CONTEXT</span><strong id="context-remaining">—</strong><small id="context-accounted">Not reported</small></div>
+    <div id="context-headroom" class="context-headroom" hidden title="Reported prompt plus output against the model context limit. This is not OpenCode's compaction threshold or reserved output budget."><span>CONTEXT LEFT</span><strong id="context-remaining">—</strong><small id="context-accounted">Not reported</small></div>
     <figure id="signal" class="signal" role="img" aria-label="No observed throughput yet">
       <div class="chart-top"><span id="chart-title">Request throughput</span><span id="ceiling">tok/s</span></div>
       <div class="plot"><svg viewBox="0 0 600 120" preserveAspectRatio="none" aria-hidden="true"><path class="grid" d="M4 4H596 M4 60H596 M4 116H596"/><g id="trace"></g><circle id="cursor" r="3" hidden/></svg><span id="chart-empty">The next request starts here.</span></div>
@@ -53,7 +53,7 @@ root.innerHTML = `
     </figure>
     <div class="metrics" aria-label="Current request">
       <div><span class="metric-label">Context</span><strong id="context">—</strong><span id="context-detail" class="metric-detail">Not reported</span><div class="meter" aria-hidden="true"><i id="context-bar"></i></div></div>
-      <div><span class="metric-label">Prefix reused</span><strong id="reuse">—</strong><span id="reuse-detail" class="metric-detail">Not reported</span><div class="meter" aria-hidden="true"><i id="reuse-bar"></i></div></div>
+      <div><span class="metric-label">Input reused</span><strong id="reuse">—</strong><span id="reuse-detail" class="metric-detail">Not reported</span><div class="meter" aria-hidden="true"><i id="reuse-bar"></i></div></div>
       <div><span class="metric-label">Requests</span><strong id="requests">—</strong><span id="queue" class="metric-detail">Waiting for oMLX</span></div>
     </div>
     ${captureMarkup}
@@ -62,7 +62,7 @@ root.innerHTML = `
       <p class="insight-note">Last-seen request averages · not final results</p>
       <ol id="recent-list" class="recent-list"><li class="insight-note">Generations appear here after they leave the active view.</li></ol>
       <div class="insight-actions"><button id="copy-recent" type="button" disabled>Copy recent</button><button id="clear-recent" type="button" disabled title="Clear this view’s observation history, not runtime statistics">Clear history</button></div>
-      <p class="insight-note">Only observed while this view is open. Gaps and aborted requests are not treated as successful completions. Held in memory, not saved to disk.</p>
+      <details class="reading-help"><summary>What is recorded?<span aria-hidden="true">+</span></summary><p>Only activity seen while this view is open. Last-seen counts may miss the final tokens; an ended observation does not prove a successful reply. History stays in memory and clears when the view closes.</p></details>
     </section>
   </section>
   <aside class="side-stack" aria-label="Host resources and server statistics">
@@ -79,7 +79,7 @@ root.innerHTML = `
       <dl class="native-values"><div><dt>Wired</dt><dd id="wired">—</dd></div><div><dt>Compressed</dt><dd id="compressed">—</dd></div><div><dt>Swap used</dt><dd id="swap">—</dd></div></dl>
       <p id="native-freshness" class="native-note">Native readings · every 10s</p>
     </div>
-    <p class="machine-explanation">Whole host, not oMLX alone. Non-free RAM includes reclaimable pages; it is not Activity Monitor’s Memory Used.</p>
+    <details class="reading-help machine-explanation"><summary>About memory<span aria-hidden="true">+</span></summary><p>These readings cover the whole host, not just oMLX. Non-free RAM includes reclaimable pages and differs from Activity Monitor’s Memory Used. Compressed memory is its physical storage. Swap used is an allocation, not swap traffic.</p></details>
   </section>
   <section id="cache-lens" class="insight-section" aria-labelledby="cache-title">
     <div class="section-heading"><h2 id="cache-title">Cache &amp; input</h2><span>Current request</span></div>
@@ -88,14 +88,14 @@ root.innerHTML = `
     <div id="cache-input-bar" class="cache-input-bar" role="img" aria-label="Input cache reuse"><span id="cache-reused-fill"></span></div>
     <div class="cache-tier-values"><div><span>RAM cache</span><strong id="cache-ram-size">—</strong></div><div><span>SSD cache</span><strong id="cache-ssd-size">—</strong></div></div>
     <p id="cache-bank-state" class="insight-note">Server cache totals</p>
-    <p class="insight-note">Unreused input is not necessarily the size of a prefill stage.</p>
+    <details class="reading-help"><summary>About cache reuse<span aria-hidden="true">+</span></summary><p>Reused and new tokens describe the input. Prefill progress describes the current stage, which may be smaller. RAM and SSD cache sizes come from oMLX and can overlap other memory totals.</p></details>
   </section>
   <section id="resident-section" class="insight-section" aria-labelledby="resident-title" hidden>
     <div class="section-heading"><h2 id="resident-title">Loaded models</h2><span id="resident-count"></span></div>
     <ul id="resident-list" class="resident-list"></ul><p id="resident-note" class="insight-note"></p>
   </section>
   <p id="runtime-advisory" class="runtime-advisory" role="status" hidden></p>
-  <section id="session-stats" class="session" aria-labelledby="session-title"><div class="section-heading"><h2 id="session-title">Server session</h2><span id="uptime">Since start / reset</span></div><div class="session-values"><div><span>Decode average</span><strong id="average-decode">—</strong></div><div><span>Prefill average</span><strong id="average-prefill">—</strong></div><div><span>Cache efficiency</span><strong id="average-cache">—</strong></div></div><p id="session-stats-state" class="native-note">Completed requests across all models</p></section>
+  <section id="session-stats" class="session" aria-labelledby="session-title"><div class="section-heading"><h2 id="session-title">Server totals</h2><span id="uptime">Since start / reset</span></div><div class="session-values"><div><span>Generation average</span><strong id="average-decode">—</strong></div><div><span>Context reading</span><strong id="average-prefill">—</strong></div><div><span>Cache efficiency</span><strong id="average-cache">—</strong></div></div><p id="session-stats-state" class="native-note">Completed requests across all models</p></section>
   <details class="details"><summary>Runtime details<span aria-hidden="true">+</span></summary><dl>
     <div><dt>oMLX process footprint</dt><dd id="process-memory">—</dd></div>
     <div><dt>Model allocation</dt><dd id="model-memory">—</dd></div>
@@ -170,7 +170,7 @@ const drawSignal = (now: number, live: boolean, phase: TelemetryPhase): void => 
   hidden('chart-empty', points.length > 0);
   text('chart-title', tracePhase === 'prefill' ? 'Prefill · reported speed' : 'Generation · request average');
   text('ceiling', `${count(geometry.upper)} tok/s`);
-  text('chart-state', points.length ? live ? 'Live observations' : 'Recent observations · not live' : 'Observed samples only');
+  text('chart-state', points.length ? live ? 'Live readings' : 'Recent readings · not live' : 'Waiting for samples');
   node('signal').dataset.live = String(live);
   node('signal').setAttribute('aria-label', points.length ? `${tracePhase} throughput over 90 seconds. ${points.length} observations. Latest ${rate(points.at(-1)?.rate)}. Gaps are not zero.` : 'No observed throughput in the last 90 seconds.');
 };
@@ -211,7 +211,7 @@ const update = (snapshot: TelemetrySnapshot): void => {
   text('rate', liveRate !== null ? rateNumber.format(liveRate) : phase === 'idle' ? 'Ready' : phase === 'notLoaded' ? 'Standby' : '—');
   node('rate').classList.toggle('is-word', liveRate === null);
   text('unit', liveRate !== null ? 'tokens / second' : phase === 'idle' ? 'Waiting for your next request' : phase === 'notLoaded' ? 'Load a model in oMLX' : 'No fresh throughput');
-  text('activity', stale ? snapshot.message ?? 'Start oMLX on this host, then refresh.' : current.message ?? (phase === 'idle' ? 'Model resident. Nothing running.' : phase === 'notLoaded' ? 'Server is healthy. No model is resident.' : `${count(current.activeRequests)} active · ${current.queuedRequests === null ? 'queue not reported' : current.queuedRequests ? `${current.queuedRequests} queued` : 'queue clear'}`));
+  text('activity', stale ? snapshot.message ?? 'Start oMLX on this host, then refresh.' : current.message ?? (phase === 'idle' ? 'Model ready. Nothing running.' : phase === 'notLoaded' ? 'oMLX is ready. Load a model to begin.' : `${count(current.activeRequests)} active · ${current.queuedRequests === null ? 'queue not reported' : current.queuedRequests ? `${current.queuedRequests} queued` : 'queue clear'}`));
   text('notice', stale ? last ? `${age(last.sampledAt)}. Retained details are not live.` : 'Read-only connection · check your local oMLX endpoint and credential.' : '');
   hidden('notice', !stale);
   renderProgress(current);
@@ -223,7 +223,7 @@ const update = (snapshot: TelemetrySnapshot): void => {
   const budget = contextBudget(snapshot);
   hidden('context-headroom', budget === null);
   text('context-remaining', budget ? `${count(budget.remaining)} tokens to model limit` : '—');
-  text('context-accounted', budget ? `${percent(budget.percent)} accounted · prompt + output` : 'Not reported');
+  text('context-accounted', budget ? `${percent(budget.percent)} used · input + output` : 'Not reported');
   const contextPercent = ratio(current?.promptTokens, current?.contextWindow);
   const reusedPercent = ratio(current?.cachedTokens, current?.promptTokens);
   text('context', percent(contextPercent)); text('context-detail', current?.promptTokens == null ? 'Not reported' : `${count(current.promptTokens)} / ${count(current.contextWindow)}`);
@@ -312,12 +312,12 @@ pauseButton.addEventListener('click', () => {
   button.disabled = userPaused || manualRefresh;
   text('connection', userPaused ? 'Monitoring paused' : 'Resuming monitoring');
   text('phase', userPaused ? 'Paused' : 'Refreshing');
-  text('unit', userPaused ? 'Frozen observation' : 'Waiting for a fresh observation');
+  text('unit', userPaused ? 'Paused reading' : 'Waiting for a fresh observation');
   if (!userPaused) text('rate', '—');
   text('notice', userPaused ? 'Only this monitor is paused. Your model keeps running; these readings are frozen.' : 'Resuming live observations…');
   hidden('notice', false);
   text('chart-end', userPaused ? 'paused' : 'now');
-  text('resource-state', userPaused ? 'Frozen observations' : 'Waiting for fresh observations');
+  text('resource-state', userPaused ? 'Paused readings' : 'Waiting for fresh observations');
   text('machine-freshness', userPaused ? 'Frozen reading' : 'Refreshing');
   text('freshness', userPaused ? 'Monitoring paused' : 'Refreshing');
   drawSignal(Date.now(), false, latest.phase);
@@ -331,7 +331,7 @@ const actionStatus = (message: string): void => {
   text('action-status', message); hidden('action-status', !message);
   statusTimer = message ? setTimeout(() => { hidden('action-status', true); statusTimer = null; }, 8_000) : null;
 };
-const captureView = new CaptureView(shell, text => host.writeClipboard(text), actionStatus, version);
+const captureView = new CaptureView(shell, text => host.writeClipboard(text), actionStatus, version, host);
 const sharing = new SharingControls(node('share-actions'), host, () => [measurementReport(latest, lastSystem, userPaused, version), captureView.report()].filter(Boolean).join('\n\n'), actionStatus);
 const applyPreference = (key: PreferenceKey, value: boolean): void => {
   if (disposed) return;
@@ -380,5 +380,5 @@ host.onReady((ready) => {
   poller.start();
 });
 document.addEventListener('visibilitychange', syncMonitoring);
-window.addEventListener('pagehide', (event) => { poller.stop(); clearFreshness(); resources.break(); signal.break(); insightView.suspend(); captureView.suspend(); monitorGeneration += 1; if (!event.persisted) { disposed = true; sharing.dispose(); if (statusTimer !== null) clearTimeout(statusTimer); host.dispose(); } });
+window.addEventListener('pagehide', (event) => { poller.stop(); clearFreshness(); resources.break(); signal.break(); insightView.suspend(); captureView.suspend(); monitorGeneration += 1; if (!event.persisted) { disposed = true; sharing.dispose(); captureView.dispose(); if (statusTimer !== null) clearTimeout(statusTimer); host.dispose(); } });
 window.addEventListener('pageshow', (event) => { if (event.persisted && mounted) { syncMonitoring(); poller.start(); } });

@@ -25,12 +25,12 @@ test('responsive layouts preserve metrics in both themes', async ({ page }, info
 test('polling preserves controls, focus and open details', async ({ page }) => {
   const frame = await openPanel(page);
   const original = await frame.locator('#refresh').elementHandle();
-  await frame.locator('summary').click();
-  await frame.locator('summary').focus();
+  await frame.locator('.details > summary').click();
+  await frame.locator('.details > summary').focus();
   await page.waitForTimeout(1_100);
   expect(await original!.evaluate(el => el.isConnected)).toBe(true);
-  await expect(frame.locator('details')).toHaveJSProperty('open', true);
-  await expect(frame.locator('summary')).toBeFocused();
+  await expect(frame.locator('details.details')).toHaveJSProperty('open', true);
+  await expect(frame.locator('.details > summary')).toBeFocused();
   await frame.locator('#refresh').click();
   await expect(frame.locator('#refresh')).toBeEnabled();
 });
@@ -390,7 +390,7 @@ test('performance capture observes, pins, copies, and clears without running inf
 test('pause terminates a capture honestly and context headroom has the correct scope',async({page})=>{
   const frame=await openPanel(page);
   await expect(frame.locator('#context-headroom')).toHaveAttribute('title',/not OpenCode/);
-  await expect(frame.locator('#context-accounted')).toContainText('prompt + output');
+  await expect(frame.locator('#context-accounted')).toContainText('input + output');
   await frame.locator('#capture-start').click();await frame.locator('#pause').click();
   await expect(frame.locator('#capture-state')).toHaveText('Partial capture');
   await expect(frame.locator('#capture-note')).toContainText('Monitoring interrupted');

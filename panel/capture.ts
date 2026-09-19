@@ -1,7 +1,7 @@
 import type { TelemetrySnapshot } from '../src/telemetry.ts';
 
 export type Capture = {
-  model: string; targetSeconds: 30 | 60; startedAt: number; lastAt: number;
+  model: string; targetSeconds: 30 | 60 | 600; startedAt: number; lastAt: number;
   seconds: number; samples: number; decodeSeconds: number; decodeTokens: number;
   peakProcessGB: number | null; peakCPU: number | null; startSwapGB: number | null;
   lastSwapGB: number | null; status: 'recording' | 'finished' | 'interrupted'; note: string;
@@ -23,7 +23,7 @@ export class PerformanceCapture {
   constructor(private readonly clock: () => number = () => performance.now()) {}
   get recording(): boolean { return this.current?.status === 'recording'; }
 
-  start(snapshot: TelemetrySnapshot, targetSeconds: 30 | 60): boolean {
+  start(snapshot: TelemetrySnapshot, targetSeconds: 30 | 60 | 600): boolean {
     if (this.recording || !snapshot.available || !snapshot.modelID || snapshot.activeRequests !== 1
       || !['decode', 'prefill', 'processing'].includes(snapshot.phase)) return false;
     this.started = this.lastClock = this.clock();
@@ -77,6 +77,11 @@ export class PerformanceCapture {
     if (!this.current || !this.recording) return;
     this.current.status = 'interrupted'; this.current.note = reason + ' · partial observation'; this.previous = null;
   }
+  finish(note: string): void {
+    if (!this.recording || !this.current) return;
+    this.current.status = 'finished'; this.current.note = note; this.previous = null;
+  }
+  clearCurrent(): void { this.current = null; this.previous = null; }
   pin(): boolean {
     if (!this.current || this.recording || capturedRate(this.current) === null) return false;
     this.baseline = { ...this.current }; return true;
