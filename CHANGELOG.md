@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.8 — 2026-09-19
+
+- Check compatibility with oMLX 0.6.4 and update the OpenChamber SDK to 1.24.2.
+- Show DFlash output counts and observed recent speed in the extension and Mac menu bar, without inventing unavailable prefill progress.
+- Stop opening Keychain at Mac startup. New API keys stay in memory unless you choose to save them.
+- Make saved-key access an explicit choice, with cancel-safe settings and no changes to existing key protection.
+- Match the Mac app's OpenCode connection setup to the extension, including commented configuration files.
+- Show model-context headroom and request-matched input reuse in the Mac overview and menu popover.
+- Keep prefill stages, concurrent activity, and missing readings consistent across both clients.
+- Respect servers that already allow key-free monitoring without changing their security settings.
+- Improve resource-reader reliability and keep host readings available during connection errors.
+
+Mac builds remain previews without Apple notarization. Startup no longer accesses
+Keychain; Finder and Gatekeeper can still request their own approval.
+
 ## 0.5.7 — 2026-09-19
 
 - Point at the speed chart to inspect earlier readings, or use the arrow keys.

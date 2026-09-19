@@ -1,7 +1,7 @@
 import type { AvailableTelemetry, TelemetrySnapshot } from '../src/telemetry.ts';
 
 export const SIGNAL_WINDOW_MS = 90_000;
-export type SignalPoint = { at: number; rate: number; phase: 'decode' | 'prefill'; segment: number };
+export type SignalPoint = { at: number; rate: number; phase: 'decode' | 'prefill'; segment: number; basis?: 'observed' };
 
 export class SignalHistory {
   points: SignalPoint[] = [];
@@ -10,22 +10,23 @@ export class SignalHistory {
 
   break(): void { this.identity = ''; }
 
-  observe(snapshot: TelemetrySnapshot, intervalMs = 500): void {
+  observe(snapshot: TelemetrySnapshot, intervalMs = 500, observedRate: number | null = null): void {
     this.prune(snapshot.sampledAt);
-    const rate = snapshot.phase === 'decode' ? snapshot.liveDecodeTPS
+    const observed = snapshot.phase === 'decode' && snapshot.liveDecodeTPS === null && observedRate !== null;
+    const rate = snapshot.phase === 'decode' ? snapshot.liveDecodeTPS ?? observedRate
       : snapshot.phase === 'prefill' ? snapshot.livePrefillTPS : null;
     if (!snapshot.available || rate === null || !Number.isFinite(rate) || rate < 0) {
       this.identity = '';
       return;
     }
     if (snapshot.phase !== 'decode' && snapshot.phase !== 'prefill') return;
-    const identity = JSON.stringify([snapshot.modelID, snapshot.phase, snapshot.traceEpoch]);
+    const identity = JSON.stringify([snapshot.modelID, snapshot.phase, snapshot.traceEpoch, observed]);
     const last = this.points.at(-1);
     if (last && snapshot.sampledAt <= last.at) return;
     const allowedGap = Number.isFinite(intervalMs) ? Math.max(2_500, Math.min(5_000, intervalMs + 1_000)) : 2_500;
     if (identity !== this.identity || !last || snapshot.sampledAt - last.at > allowedGap) this.segment += 1;
     this.identity = identity;
-    this.points.push({ at: snapshot.sampledAt, rate, phase: snapshot.phase, segment: this.segment });
+    this.points.push({ at: snapshot.sampledAt, rate, phase: snapshot.phase, segment: this.segment, ...(observed ? {basis: 'observed' as const} : {}) });
     // At the maximum two observations/second this retains a full 90s window.
     if (this.points.length > 200) this.points.splice(0, this.points.length - 200);
   }

@@ -64,7 +64,7 @@ const requestJSON = async ({
     throw new OmlxFailure('runtime_unreachable', 'The oMLX runtime returned an unsafe response.');
   }
   if (response.status === 401 || response.status === 403) {
-    throw new OmlxFailure('authentication_failed', 'The oMLX runtime rejected its saved credential.');
+    throw new OmlxFailure('authentication_failed', 'oMLX requires a valid API key or rejected the supplied key.');
   }
   if (response.status !== 200) {
     throw new OmlxFailure('runtime_unreachable', `The oMLX runtime returned HTTP ${response.status}.`);
@@ -134,7 +134,7 @@ const parseContextWindows = (body: JsonObject | null): Map<string, number> => {
     const model = asObject(item);
     const id = typeof model?.id === 'string' ? model.id : null;
     const limit = nonnegative(model?.max_context_window);
-    if (id !== null && limit !== null && limit > 0) result.set(id, Math.trunc(limit));
+    if (id !== null && limit !== null && Number.isSafeInteger(limit) && limit > 0) result.set(id, Math.trunc(limit));
   }
   return result;
 };
@@ -215,9 +215,6 @@ export class OmlxClient {
     if (config.baseURL === null) {
       return unavailableTelemetry('runtime_unreachable', config.error);
     }
-    if (config.apiKey === null) {
-      return unavailableTelemetry('authentication_failed', 'No oMLX API credential was found in OpenCode auth.');
-    }
     const key = `${resettableConfig(config)}\u0000${config.preferredModel ?? ''}`;
     if (key !== this.configKey) {
       this.configKey = key;
@@ -245,9 +242,15 @@ export class OmlxClient {
         await this.verifyIdentity(config.baseURL, timeoutFor());
         this.identityAt = this.monotonicNow();
       }
-      if (this.cookie === null) this.cookie = await this.login(config.baseURL, config.apiKey, timeoutFor());
+      // Respect the server’s existing auth policy; never change it or retry a rejected key without auth.
+      if (this.cookie === null && config.apiKey !== null) this.cookie = await this.login(config.baseURL, config.apiKey, timeoutFor());
 
       const readStatus = this.monotonicNow() - this.modelStatusAt >= 60_000;
+      if (readStatus) {
+        // Limit attempts even when another request in this collection fails.
+        this.modelStatusAt = this.monotonicNow();
+        this.contextWindows = new Map();
+      }
       const readSessionStats = this.monotonicNow() - this.statsAt >= 3_000;
       const activityPromise = this.readActivity(config.baseURL, this.cookie, timeoutFor());
       const statusPromise = readStatus
@@ -290,7 +293,7 @@ export class OmlxClient {
       }
       return {
         ...normalized,
-        traceEpoch: this.traceEpoch,
+        traceEpoch: this.signalIdentity ? this.traceEpoch : null,
         message: normalized.message ?? (this.statsState === 'stale'
           ? 'Live activity connected · session statistics are from the last successful read'
           : this.statsState === 'unavailable'
@@ -331,10 +334,10 @@ export class OmlxClient {
     for (const modelValue of Array.isArray(active?.models) ? active.models : []) {
       const model = asObject(modelValue);
       if (!model) continue;
-      for (const kind of ['prefilling', 'generating']) {
+      for (const kind of ['prefilling', 'generating', 'activities']) {
         for (const entry of Array.isArray(model[kind]) ? model[kind] : []) {
           const flight = asObject(entry);
-          if (!flight) continue;
+          if (!flight || kind === 'activities' && (flight.kind !== 'generate' || typeof flight.request_id !== 'string' || !flight.request_id.trim())) continue;
           const identity = JSON.stringify([model.id, kind, flight.request_id, kind === 'prefilling' ? [flight.phase, flight.total] : null]);
           identities.push(identity);
           if (kind !== 'prefilling') continue;
@@ -383,13 +386,13 @@ export class OmlxClient {
     return response.cookie;
   }
 
-  private async readModelStatus(baseURL: URL, apiKey: string, timeoutMs: number): Promise<Map<string, number>> {
+  private async readModelStatus(baseURL: URL, apiKey: string | null, timeoutMs: number): Promise<Map<string, number>> {
     try {
       const response = await requestJSON({
         url: new URL('/v1/models/status', baseURL),
         fetchImpl: this.fetchImpl,
         timeoutMs,
-        init: { method: 'GET', headers: { Accept: 'application/json', Authorization: `Bearer ${apiKey}` } },
+        init: { method: 'GET', headers: { Accept: 'application/json', ...(apiKey === null ? {} : { Authorization: `Bearer ${apiKey}` }) } },
       });
       return parseContextWindows(response.body);
     } catch {
@@ -399,22 +402,22 @@ export class OmlxClient {
     }
   }
 
-  private async readStats(baseURL: URL, cookie: string, timeoutMs: number): Promise<JsonObject | null> {
+  private async readStats(baseURL: URL, cookie: string | null, timeoutMs: number): Promise<JsonObject | null> {
     const response = await requestJSON({
       url: new URL('/admin/api/stats?scope=session', baseURL),
       fetchImpl: this.fetchImpl,
       timeoutMs,
-      init: { method: 'GET', headers: { Accept: 'application/json', Cookie: `omlx_admin_session=${cookie}` } },
+      init: { method: 'GET', headers: { Accept: 'application/json', ...(cookie === null ? {} : { Cookie: `omlx_admin_session=${cookie}` }) } },
     });
     return isStatsPayload(response.body) ? response.body : null;
   }
 
-  private async readActivity(baseURL: URL, cookie: string, timeoutMs: number): Promise<JsonObject> {
+  private async readActivity(baseURL: URL, cookie: string | null, timeoutMs: number): Promise<JsonObject> {
     const response = await requestJSON({
       url: new URL('/admin/api/activity', baseURL),
       fetchImpl: this.fetchImpl,
       timeoutMs,
-      init: { method: 'GET', headers: { Accept: 'application/json', Cookie: `omlx_admin_session=${cookie}` } },
+      init: { method: 'GET', headers: { Accept: 'application/json', ...(cookie === null ? {} : { Cookie: `omlx_admin_session=${cookie}` }) } },
     });
     if (response.body === null) throw new OmlxFailure('runtime_unreachable', 'oMLX activity was empty.');
     return response.body;

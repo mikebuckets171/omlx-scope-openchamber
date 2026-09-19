@@ -12,6 +12,11 @@ in the private report. Only the latest published version receives fixes.
 
 ## Security boundaries
 
+The Mac app does not call Keychain at startup or while sampling. Manual keys are
+memory-only unless the user selects secure storage. Optional Keychain actions may
+show macOS authorization; canceling does not replace the active connection. No
+access-control list is broadened and no plaintext credential fallback is added.
+
 The extension panel is sandboxed by OpenChamber. Its approved local service is
 not: it runs under the same user account as OpenChamber and can read the saved
 oMLX credential. The listed commands describe intended use, not an OS-level

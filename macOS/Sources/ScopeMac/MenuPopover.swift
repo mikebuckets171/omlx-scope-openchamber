@@ -22,13 +22,13 @@ public struct MenuPopover: View {
                 PrefillCard(reading: progress, paused: model.paused, compact: true)
             } else {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(model.paused ? "Paused" : model.runtime.rate == nil ? model.runtime.phase == .idle ? "Ready" : "—" : DisplayFormat.number(model.runtime.rate))
+                Text(model.paused ? "Paused" : model.displayRate == nil ? model.runtime.phase == .idle ? "Ready" : "—" : DisplayFormat.number(model.displayRate))
                     .font(.system(size: 43, weight: .light, design: .rounded)).monospacedDigit()
-                if model.runtime.rate != nil && !model.paused { Text("tok/s").foregroundStyle(.secondary).font(.subheadline) }
+                if model.displayRate != nil && !model.paused { Text("tok/s").foregroundStyle(.secondary).font(.subheadline) }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 5) {
                     Text(DisplayFormat.tokens(model.runtime.active) + " active").font(.subheadline)
-                    Text("Request average").font(.caption2).foregroundStyle(.tertiary)
+                    Text(model.runtime.rate == nil && model.runtime.observedRate != nil ? "Recent output" : "Request average").font(.caption2).foregroundStyle(.tertiary)
                 }
             }
             HistoryPlot(history: model.speedHistory, height: 48, caption: model.paused ? "Paused" : "Observed · 90s")
@@ -39,14 +39,23 @@ public struct MenuPopover: View {
             Divider()
             VStack(spacing: 3) {
                 if model.runtime.phase == .prefill {
-                    ReadingRow(title: "Context reading", value: model.paused || model.runtime.rate == nil ? "—" : DisplayFormat.number(model.runtime.rate) + " tok/s")
+                    ReadingRow(title: "Context reading", value: model.paused || model.displayRate == nil ? "—" : DisplayFormat.number(model.displayRate) + " tok/s")
+                }
+                if let remaining = model.runtime.contextRemaining {
+                    ReadingRow(title: "Tokens to model limit", value: DisplayFormat.tokens(remaining))
+                }
+                if let reused = model.runtime.inputReusedPercent {
+                    ReadingRow(title: "Input reused", value: DisplayFormat.percent(reused))
                 }
                 ReadingRow(title: "CPU", value: DisplayFormat.percent(model.host.cpu))
                 ReadingRow(title: "Non-free RAM", value: DisplayFormat.bytes(model.host.nonFreeBytes))
                 ReadingRow(title: "Swap used", value: DisplayFormat.bytes(model.host.swapBytes))
             }
-            if !model.runtime.connected {
-                Text(model.runtime.message).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if model.runtime.phase == .decode || model.runtime.phase == .processing, let output = model.runtime.output {
+                ReadingRow(title: "Output tokens", value: DisplayFormat.tokens(output))
+            }
+            if !model.runtime.connected || model.runtime.hasActivity && model.runtime.rate == nil {
+                Text(model.runtime.observedRate != nil ? model.rateCaption : model.runtime.message).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Divider()
             HStack(spacing: 10) {

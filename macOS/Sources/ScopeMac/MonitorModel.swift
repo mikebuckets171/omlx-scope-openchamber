@@ -25,11 +25,16 @@ public final class MonitorModel {
     public private(set) var endpoint = "http://127.0.0.1:8000"
     public private(set) var credentialSource = "Not configured"
     public private(set) var settingsMessage: String?
+    public private(set) var connectionBusy = false
+    public private(set) var needsKeychainAccess = false
     public private(set) var samples: Int = 0
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let client: OmlxClient
+    @ObservationIgnored private let credentials: any CredentialStore
     @ObservationIgnored private let sampler: @Sendable () async -> HostReading
     @ObservationIgnored private var key = ""
+    @ObservationIgnored private var preferredModel: String?
+    @ObservationIgnored private var configurationProblem: String?
     @ObservationIgnored private var loop: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var visibleViews: Set<UUID> = []
@@ -38,32 +43,50 @@ public final class MonitorModel {
     @ObservationIgnored private var started = false
     @ObservationIgnored private var failures = 0
     @ObservationIgnored private var historySegment = 0
+    @ObservationIgnored private var rateHistoryBasis = ""
     @ObservationIgnored private var nextRuntimeAt: TimeInterval = 0
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
-    public init(preview: Bool = false) {
+    public convenience init(preview: Bool = false) {
         let transport = LocalTransport(), hostSampler = HostSampler()
-        defaults = preview ? UserDefaults(suiteName: "com.mikebuckets171.scope-preview")! : .standard
-        client = OmlxClient { try await transport.send($0) }
-        sampler = { await hostSampler.sample() }
-        if !preview {
-            let saved = SavedConnection.discover()
-            endpoint = defaults.string(forKey: "endpoint") ?? saved.endpoint ?? endpoint
-            efficient = defaults.bool(forKey: "efficient")
-            progressDisplay = ProgressDisplay(rawValue: defaults.string(forKey: "progressDisplay") ?? "") ?? .remaining
-            menuReadout = MenuReadout(rawValue: defaults.string(forKey: "menuReadout") ?? "") ?? .speed
-            let preference = defaults.string(forKey: "credentialPreference")
-            if preference != "none" {
-                if preference != "opencode", let stored = Credentials.read() { key = stored; credentialSource = "Keychain" }
-                else if preference != "keychain", let savedKey = saved.key { key = savedKey; credentialSource = "OpenCode" }
-            }
+        self.init(client: OmlxClient { try await transport.send($0) },
+                  sampler: { await hostSampler.sample() },
+                  defaults: preview ? UserDefaults(suiteName: "com.mikebuckets171.scope-preview")! : .standard,
+                  loadSaved: !preview)
+    }
+
+    init(client: OmlxClient, sampler: @escaping @Sendable () async -> HostReading,
+         defaults: UserDefaults, credentials: any CredentialStore = Credentials(),
+         loadSaved: Bool = false, savedConnection: SavedConnection? = nil) {
+        self.client = client; self.sampler = sampler; self.defaults = defaults; self.credentials = credentials
+        guard loadSaved else { return }
+        let preference = defaults.string(forKey: "credentialPreference")
+        let saved = savedConnection ?? SavedConnection.discover(includeCredential: preference == nil || preference == "opencode")
+        preferredModel = saved.model
+        endpoint = defaults.string(forKey: "endpoint") ?? saved.endpoint ?? endpoint
+        efficient = defaults.bool(forKey: "efficient")
+        progressDisplay = ProgressDisplay(rawValue: defaults.string(forKey: "progressDisplay") ?? "") ?? .remaining
+        menuReadout = MenuReadout(rawValue: defaults.string(forKey: "menuReadout") ?? "") ?? .speed
+        // Startup never asks Security.framework to read, update, or delete a key.
+        if preference == "keychain" {
+            needsKeychainAccess = true; credentialSource = "Keychain · not opened"
+            settingsMessage = "Choose Use Keychain Key to open your saved key, or use your OpenCode connection."
+        } else if preference == "session" {
+            credentialSource = "This launch only · key needed"
+            settingsMessage = "The previous key was kept only in memory. Enter it again to connect."
+        } else if preference != "none", saved.problem == nil, let savedKey = saved.key {
+            key = savedKey; credentialSource = "OpenCode"
         }
+        // A manually chosen endpoint is independent of unrelated OpenCode configuration.
+        let usesDiscovery = preference == nil || preference == "opencode" || defaults.string(forKey: "endpoint") == nil
+        if usesDiscovery, let problem = saved.problem { settingsMessage = problem; configurationProblem = problem }
     }
 
-    init(client: OmlxClient, sampler: @escaping @Sendable () async -> HostReading, defaults: UserDefaults) {
-        self.client = client; self.sampler = sampler; self.defaults = defaults
+    public var displayRate: Double? { runtime.rate ?? runtime.observedRate }
+    public var rateCaption: String {
+        runtime.rate == nil && runtime.observedRate != nil ? "Recent output · observed over up to 10s"
+            : runtime.phase == .prefill ? "Reported prefill speed" : "Request average"
     }
-
     public var menuText: String {
         if paused { return "Paused" }
         switch menuReadout {
@@ -73,11 +96,11 @@ public final class MonitorModel {
         case .speed:
             if let prefill { return prefill.menuText(progressDisplay) }
             if runtime.phase == .prefill { return "Prefill" }
-            if runtime.connected, let rate = runtime.rate {
+            if runtime.connected, let rate = displayRate {
                 let value = rate >= 1000 ? rate.formatted(.number.notation(.compactName).precision(.fractionLength(1))) : DisplayFormat.number(rate)
                 return value + " t/s"
             }
-            return runtime.phase == .idle ? "Ready" : runtime.phase == .offline ? "Offline" : "—"
+            return runtime.phase == .idle ? "Ready" : runtime.phase == .offline ? "Offline" : runtime.hasActivity ? "Working" : "—"
         }
     }
     public var statusText: String { paused ? "Monitoring paused" : runtime.phase.title }
@@ -129,6 +152,7 @@ public final class MonitorModel {
         loop?.cancel(); loop = nil
         guard started, !paused, !asleep, !screenAsleep, isVisible || menuReadout != .icon else { return }
         loop = Task { [weak self] in
+            await self?.client.resetOutputObservation()
             while !Task.isCancelled {
                 guard let self, current == self.generation else { return }
                 await self.poll(current)
@@ -157,46 +181,96 @@ public final class MonitorModel {
         runtime = reading
         failures = reading.connected ? 0 : min(5, failures + 1)
         nextRuntimeAt = reading.connected ? 0 : ProcessInfo.processInfo.systemUptime + min(30, pow(2, Double(failures)))
-        speedHistory.append(time: reading.sampledAt, value: reading.rate, segment: reading.epoch &+ (historySegment &* 1_000_000))
+        let basis = reading.phase.rawValue + (reading.rate == nil && reading.observedRate != nil ? ":observed" : ":reported")
+        if reading.rate != nil || reading.observedRate != nil {
+            if basis != rateHistoryBasis { speedHistory.clear() }
+            rateHistoryBasis = basis
+        }
+        speedHistory.append(time: reading.sampledAt, value: reading.rate ?? reading.observedRate, segment: reading.epoch &+ (historySegment &* 1_000_000))
     }
 
     private func collectRuntime() async -> RuntimeReading? {
         // A CPU/memory-only menu does not need runtime requests while all views are hidden.
         guard isVisible || menuReadout == .speed else { return nil }
         guard ProcessInfo.processInfo.systemUptime >= nextRuntimeAt else { return nil }
+        if let problem = configurationProblem { return .unavailable(problem) }
         guard let origin = try? Endpoint(endpoint) else { return .unavailable(ConnectionError.invalidEndpoint.localizedDescription) }
-        return await client.snapshot(connection: Connection(endpoint: origin, apiKey: key))
+        return await client.snapshot(connection: Connection(endpoint: origin, apiKey: key, preferredModel: preferredModel))
     }
 
-    public func saveConnection(endpoint text: String, newKey: String) {
+    @discardableResult
+    public func saveConnection(endpoint text: String, newKey: String, rememberInKeychain: Bool = false) async -> Bool {
+        guard !connectionBusy else { return false }
+        connectionBusy = true; defer { connectionBusy = false }
         do {
             let parsed = try Endpoint(text)
-            if !newKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                try Credentials.save(newKey.trimmingCharacters(in: .whitespacesAndNewlines))
-                key = newKey.trimmingCharacters(in: .whitespacesAndNewlines); credentialSource = "Keychain"
-                defaults.set("keychain", forKey: "credentialPreference")
+            let entered = newKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !entered.isEmpty {
+                if rememberInKeychain { try await credentials.save(entered) }
+                key = entered; credentialSource = rememberInKeychain ? "Keychain" : "This launch only"
+                defaults.set(rememberInKeychain ? "keychain" : "session", forKey: "credentialPreference")
+                needsKeychainAccess = false
+            } else if key.isEmpty && !needsKeychainAccess {
+                // An explicit key-free connection must survive later discovery failures.
+                credentialSource = "No API key"
+                defaults.set("none", forKey: "credentialPreference")
             }
             endpoint = parsed.url.absoluteString; defaults.set(endpoint, forKey: "endpoint")
-            settingsMessage = "Connection saved."
-            runtime = RuntimeReading(); speedHistory.clear(); failures = 0; nextRuntimeAt = 0; restart()
-        } catch { settingsMessage = error.localizedDescription }
+            configurationProblem = nil
+            settingsMessage = entered.isEmpty ? (key.isEmpty ? "Connection saved. No API key is in use." : "Connection saved. Your current key was kept.")
+                : rememberInKeychain ? "Key saved in Keychain. Opening it on a future launch is your choice."
+                : "Key applied for this launch. It is not saved to disk."
+            connectionChanged()
+            return true
+        } catch {
+            settingsMessage = (error as? Credentials.Failure)?.localizedDescription
+                ?? (error as? ConnectionError)?.localizedDescription ?? "Could not update the connection. Nothing was replaced."
+            return false
+        }
     }
     public func useExistingConnection() {
+        guard !connectionBusy else { return }
         let saved = SavedConnection.discover()
-        guard let savedKey = saved.key else { settingsMessage = "No saved oMLX API key was found in OpenCode. Enter one below."; return }
-        key = savedKey; credentialSource = "OpenCode"
+        if let problem = saved.problem { settingsMessage = problem; return }
+        guard let savedEndpoint = saved.endpoint, let origin = try? Endpoint(savedEndpoint) else {
+            settingsMessage = "No supported oMLX connection was found. Enter your local endpoint."; return
+        }
+        // A server that explicitly permits key-free access can be monitored without a key.
+        preferredModel = saved.model
+        key = saved.key ?? ""; credentialSource = saved.key == nil ? "No API key" : "OpenCode"
         defaults.set("opencode", forKey: "credentialPreference")
-        if let savedEndpoint = saved.endpoint { endpoint = savedEndpoint; defaults.set(endpoint, forKey: "endpoint") }
-        settingsMessage = "Using your saved local connection. No files were changed."
-        runtime = RuntimeReading(); speedHistory.clear(); failures = 0; nextRuntimeAt = 0; restart()
+        endpoint = origin.url.absoluteString; defaults.set(endpoint, forKey: "endpoint")
+        configurationProblem = nil
+        needsKeychainAccess = false
+        settingsMessage = "Using your saved local connection. No files or Keychain items were changed."
+        connectionChanged()
     }
-    public func forgetKey() {
+    public func useKeychainKey() async {
+        guard !connectionBusy else { return }
+        connectionBusy = true; defer { connectionBusy = false }
         do {
-            try Credentials.remove(); key = ""; credentialSource = "Not configured"
+            guard let stored = try await credentials.read() else {
+                settingsMessage = "No OMLX Scope key was found in Keychain. Your connection is unchanged."; return
+            }
+            key = stored; credentialSource = "Keychain"; needsKeychainAccess = false
+            defaults.set("keychain", forKey: "credentialPreference")
+            settingsMessage = "Using your Keychain key for this launch."
+            connectionChanged()
+        } catch { settingsMessage = (error as? Credentials.Failure)?.localizedDescription ?? "Could not open the saved key. Your connection is unchanged." }
+    }
+    public func forgetKey() async {
+        guard !connectionBusy else { return }
+        connectionBusy = true; defer { connectionBusy = false }
+        do {
+            try await credentials.remove()
+            key = ""; credentialSource = "Not configured"; needsKeychainAccess = false
             defaults.set("none", forKey: "credentialPreference")
             settingsMessage = "Saved key removed from OMLX Scope. OpenCode files were not changed."
-            runtime = .unavailable(ConnectionError.credentialRequired.localizedDescription); nextRuntimeAt = 0; restart()
-        } catch { settingsMessage = error.localizedDescription }
+            connectionChanged()
+        } catch { settingsMessage = (error as? Credentials.Failure)?.localizedDescription ?? "Could not remove the saved key. Your connection is unchanged." }
+    }
+    private func connectionChanged() {
+        runtime = RuntimeReading(); speedHistory.clear(); failures = 0; nextRuntimeAt = 0; restart()
     }
     public func copyDiagnostics() {
         let text = "OMLX Scope \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "development")\n\(ProcessInfo.processInfo.operatingSystemVersionString)\nRuntime: \(runtime.phase.title)\nCredential source: \(credentialSource)\nHost samples: \(samples)\nPaused: \(paused)\nEnergy saving: \(efficient)\n"

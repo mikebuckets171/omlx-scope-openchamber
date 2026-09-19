@@ -115,6 +115,14 @@ if(m.type === 'hello') { if(!params.has('nohost')) ready(); return; }
   payload.residentModels[0].activeRequests = ['decode','prefill','processing'].includes(phase) ? 1 : 0;
   if (phase === 'prefill') payload.residentModels[0].tokensPerSecond = state === 'prefill-stale' ? null : 184.5;
   if (phase === 'notLoaded') { payload.residentModels = []; payload.residentModelCount = 0; }
+  if (state === 'dflash' || state === 'dflash-preparing') {
+    Object.assign(payload, {phase:state === 'dflash' ? 'decode' : 'processing',activeRequests:1,
+      modelID:'Qwen · DFlash preview',liveDecodeTPS:null,livePrefillTPS:null,
+      completionTokens:state === 'dflash' ? 256 + samples * 16 : null,elapsedSeconds:30 + samples / 2,
+      promptTokens:null,cachedTokens:null,prefillProgress:null,prefillProcessedTokens:null,prefillTotalTokens:null,prefillETASeconds:null,
+      message:state === 'dflash' ? 'Output arriving · request-average speed not reported' : 'Working · this engine does not report prefill percentage',
+      residentModels:[{id:'Qwen · DFlash preview',phase:state === 'dflash' ? 'decode' : 'processing',activeRequests:1,queuedRequests:0,allocationGB:17.1,tokensPerSecond:null,prefillProgress:null,progressStale:false}]});
+  }
   Object.assign(payload, window.previewOverride);
   post({type:'result',id:m.id,ok:true,payload:{status:200,body:JSON.stringify(payload)}});
 });

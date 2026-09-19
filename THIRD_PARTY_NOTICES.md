@@ -2,7 +2,7 @@
 
 ## OpenChamber SDK
 
-The bundled panel uses `@openchamber/sdk` 1.24.0, licensed under the MIT
+The bundled panel uses `@openchamber/sdk` 1.24.2, licensed under the MIT
 License.
 
 Copyright (c) 2025 Bohdan Triapitsyn

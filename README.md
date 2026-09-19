@@ -16,8 +16,8 @@ oMLX’s dashboard rather than replacing it.
 
 <!-- Product screenshots use synthetic readings, never a performance claim. -->
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/mikebuckets171/omlx-scope-openchamber/releases/download/v0.5.7/extension-dark.png">
-  <img alt="OMLX Scope full-page monitor" src="https://github.com/mikebuckets171/omlx-scope-openchamber/releases/download/v0.5.7/extension-light.png">
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/mikebuckets171/omlx-scope-openchamber/releases/download/v0.5.8/extension-dark.png">
+  <img alt="OMLX Scope full-page monitor" src="https://github.com/mikebuckets171/omlx-scope-openchamber/releases/download/v0.5.8/extension-light.png">
 </picture>
 
 *Full-page extension view with sample data. The panel follows OpenChamber’s theme.*
@@ -56,7 +56,7 @@ In **Settings → Extensions**, add this repository and review the permissions:
 https://github.com/mikebuckets171/omlx-scope-openchamber
 ```
 
-Alternatively, install `omlx-scope-openchamber-0.5.7.zip` from
+Alternatively, install `omlx-scope-openchamber-0.5.8.zip` from
 [Releases](https://github.com/mikebuckets171/omlx-scope-openchamber/releases/latest).
 The installable ZIP includes the built files; the GitHub source archives are not
 extension installation packages. If readings are missing, open **Connection help**
@@ -65,9 +65,13 @@ status; **Setup guide** opens the configuration instructions.
 
 ### Mac companion
 
-Download `OMLX-Scope-macOS-0.5.7.zip` from the same release, quit the old app,
-and move **OMLX Scope.app** into Applications. Requires **Apple Silicon and
+Download `OMLX-Scope-macOS-0.5.8.zip` from the same release, quit the old app,
+and move **OMLX Scope.app** into your Applications folder. Requires **Apple Silicon and
 macOS 14 or newer**. Install it separately from the extension.
+
+Startup and monitoring do not open Keychain. The app can use your saved OpenCode
+connection; a new manually entered API key stays in memory unless you explicitly
+choose Keychain storage. See the [Mac connection guide](https://github.com/mikebuckets171/omlx-scope-openchamber/blob/main/macOS/README.md) for password-prompt details.
 
 The Activity menu-bar readout shows **36% left** during prefill, then switches
 to token speed during generation. The popover and full window show more detail.
@@ -77,6 +81,14 @@ Updates finds new Mac releases on GitHub; optional daily checks are available.
 Automatic installation is enabled only in properly configured Developer ID
 builds. See the [Mac guide](https://github.com/mikebuckets171/omlx-scope-openchamber/blob/main/macOS/README.md) and
 [release-signing guide](https://github.com/mikebuckets171/omlx-scope-openchamber/blob/main/docs/RELEASING.md) for the distinction.
+
+### DFlash
+
+DFlash output counts and recent speed work in the extension and Mac menu bar.
+When the engine does not report prefill progress, Scope shows that it is working
+instead of inventing a percentage. Standard fallback prefill remains supported.
+See the [compatibility guide](https://github.com/mikebuckets171/omlx-scope-openchamber/blob/main/docs/COMPATIBILITY.md)
+for exactly what each engine reports.
 
 ## Small by design
 
@@ -91,6 +103,10 @@ of oMLX monitoring requests. Download size is not a measurement of runtime
 memory, energy use, or inference impact.
 
 ## Trust and compatibility
+
+The [compatibility notes](https://github.com/mikebuckets171/omlx-scope-openchamber/blob/main/docs/COMPATIBILITY.md)
+cover the oMLX 0.6.4 and OpenChamber 1.24.2 review, shared-reading tests, and
+intentional differences between the extension and Mac app.
 
 The local service runs under your user account, outside the panel’s browser
 sandbox. Approve it only after reviewing the source and permissions. Its

@@ -1,54 +1,58 @@
 import Foundation
 import Security
 
-struct Credentials {
-    static let service = "com.mikebuckets171.omlx-scope"
-    static func read() -> String? {
-        var query = base; query[kSecReturnData as String] = true; query[kSecMatchLimit as String] = kSecMatchLimitOne
-        var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess, let data = item as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-    static func save(_ key: String) throws {
-        let status = SecItemUpdate(base as CFDictionary, [kSecValueData as String: Data(key.utf8)] as CFDictionary)
-        if status == errSecItemNotFound {
-            var query = base; query[kSecValueData as String] = Data(key.utf8)
-            query[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-            guard SecItemAdd(query as CFDictionary, nil) == errSecSuccess else { throw Failure.storage }
-        } else if status != errSecSuccess { throw Failure.storage }
-    }
-    static func remove() throws {
-        let status = SecItemDelete(base as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else { throw Failure.storage }
-    }
-    private static var base: [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: "omlx"]
-    }
-    enum Failure: LocalizedError {
-        case storage
-        var errorDescription: String? { "Keychain could not save this change. Your existing connection has not been replaced." }
-    }
+/// Called only from explicit Settings actions, never from startup or the sampler.
+protocol CredentialStore: Sendable {
+    func read() async throws -> String?
+    func save(_ key: String) async throws
+    func remove() async throws
 }
 
-struct SavedConnection {
-    var endpoint: String?
-    var key: String?
-    /// Only these two existing files are read, with size bounds; never rewritten.
-    static func discover(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> Self {
-        func json(_ path: String) -> [String: Any] {
-            let url = home.appendingPathComponent(path)
-            guard let handle = try? FileHandle(forReadingFrom: url) else { return [:] }
-            defer { try? handle.close() }
-            guard let data = try? handle.read(upToCount: 1_000_001), data.count <= 1_000_000,
-                  let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
-            return value
+/// Serializes potentially interactive Keychain work away from the main actor.
+actor Credentials: CredentialStore {
+    static let service = "com.mikebuckets171.omlx-scope"
+    func read() throws -> String? {
+        var query = base
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecItemNotFound { return nil }
+        try check(status)
+        guard let data = item as? Data, let key = String(data: data, encoding: .utf8), !key.isEmpty else {
+            throw Failure.storage
         }
-        let settings = json(".omlx/settings.json")
-        let server = settings["server"] as? [String: Any] ?? [:]
-        let auth = json(".local/share/opencode/auth.json")["omlx"] as? [String: Any] ?? [:]
-        var result = Self()
-        if let port = server["port"] as? Int, (1...65_535).contains(port) { result.endpoint = "http://127.0.0.1:\(port)" }
-        if auth["type"] as? String == "api", let key = auth["key"] as? String, !key.isEmpty { result.key = key }
-        return result
+        return key
+    }
+    func save(_ key: String) throws {
+        let data = Data(key.utf8)
+        let status = SecItemUpdate(base as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        if status == errSecItemNotFound {
+            var query = base
+            query[kSecValueData as String] = data
+            // Use Keychain’s default protection; never broaden access controls.
+            try check(SecItemAdd(query as CFDictionary, nil))
+        } else { try check(status) }
+    }
+    func remove() throws {
+        let status = SecItemDelete(base as CFDictionary)
+        if status != errSecItemNotFound { try check(status) }
+    }
+    private var base: [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword,
+         kSecAttrService as String: Self.service, kSecAttrAccount as String: "omlx"]
+    }
+    private func check(_ status: OSStatus) throws {
+        if status == errSecUserCanceled { throw Failure.cancelled }
+        guard status == errSecSuccess else { throw Failure.storage }
+    }
+    enum Failure: LocalizedError {
+        case storage, cancelled
+        var errorDescription: String? {
+            switch self {
+            case .storage: "Keychain could not complete this change. Your connection is unchanged."
+            case .cancelled: "Keychain access was canceled. Your connection is unchanged."
+            }
+        }
     }
 }

@@ -52,6 +52,17 @@ async function stop(state) {
   }
 }
 
+function assertHostReadings(snapshot) {
+  assert(snapshot.system && typeof snapshot.system === 'object', 'Host readings must survive unavailable oMLX.');
+  if (process.platform !== 'darwin') return;
+  const readings = snapshot.system.macOS;
+  assert(readings, 'The packaged Node service must return native Mac readings.');
+  for (const key of ['wiredGB', 'compressedGB', 'swapUsedGB']) {
+    assert.equal(typeof readings[key], 'number', `${key} was not read from macOS.`);
+    assert(Number.isFinite(readings[key]) && readings[key] >= 0, `${key} must be finite and nonnegative.`);
+  }
+}
+
 async function unusedPort() {
   const probe = createServer();
   await new Promise((resolveListen, reject) => {
@@ -66,7 +77,7 @@ async function unusedPort() {
 try {
   const config = join(home, '.config/opencode');
   await mkdir(config, { recursive: true });
-  // Exercise the bundled JSONC parser. No credential means no oMLX request.
+  // Exercise the bundled JSONC parser against a closed, isolated endpoint.
   await writeFile(join(config, 'opencode.jsonc'), `// isolated smoke fixture
 {
   "provider": { "omlx": { "options": { "baseURL": "http://127.0.0.1:1/v1" } } },
@@ -98,8 +109,9 @@ try {
   assert.equal(response.status, 200);
   const snapshot = await response.json();
   assert.equal(snapshot.available, false);
-  assert.equal(snapshot.reason, 'authentication_failed', 'JSONC endpoint must parse successfully before missing-credential reporting.');
-  assert(snapshot.system && typeof snapshot.system === 'object', 'Host readings must survive unavailable oMLX.');
+  assert.equal(snapshot.reason, 'runtime_unreachable');
+  assert.equal(snapshot.message, 'The oMLX runtime did not answer.', 'JSONC must parse the configured endpoint before attempting health identification.');
+  assertHostReadings(snapshot);
 
   // A real bind failure must exit and retain its actionable cause in stderr.
   const collision = start(port);
@@ -113,6 +125,7 @@ try {
   assert.equal(service.result.code, 0, 'Service did not stop cleanly.');
   // Exercise real HTTP collection through the extracted, minified Node bundle.
   let flight = { request_id: 'private-smoke-request', processed: 64, total: 100, speed: 184, eta: 0.2 };
+  let primary = false;
   mockRuntime = createHTTPServer((request, response) => {
     const path = new URL(request.url, 'http://127.0.0.1').pathname;
     let body;
@@ -121,12 +134,13 @@ try {
       response.setHeader('Set-Cookie', 'omlx_admin_session=smoke; HttpOnly'); body = {};
     } else if (path === '/v1/models/status') body = { models: [] };
     else if (path === '/admin/api/activity' || path === '/admin/api/stats') {
-      body = { engines: {}, active_models: { models: [{ id: 'fixture', active_requests: 1, prefilling: [flight] }] } };
+      body = { engines: {}, active_models: { models: [{ id: 'fixture', active_requests: 1, prefilling: primary ? [] : [flight], activities: primary ? [flight] : [] }] } };
     } else { response.writeHead(404); response.end(); return; }
     response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify(body));
   });
   await new Promise((resolveListen, reject) => { mockRuntime.once('error', reject); mockRuntime.listen(0, '127.0.0.1', resolveListen); });
-  const activeService = start(port, { OMLX_SCOPE_BASE_URL: `http://127.0.0.1:${mockRuntime.address().port}`, OMLX_SCOPE_API_KEY: 'isolated-smoke-key' });
+  await writeFile(join(config, 'opencode.jsonc'), `// packaged JSONC fixture\n{"provider":{"omlx":{"options":{"baseURL":"http://127.0.0.1:${mockRuntime.address().port}/v1",},},},}`);
+  const activeService = start(port, { OMLX_SCOPE_API_KEY: 'isolated-smoke-key' });
   let ready = false;
   const nextDeadline = performance.now() + 5000;
   while (performance.now() < nextDeadline && !activeService.closed) {
@@ -136,6 +150,7 @@ try {
   assert(ready, `Packaged service did not restart: ${activeService.log}`);
   const activeSnapshot = await (await get('/snapshot')).json();
   assert.equal(activeSnapshot.available, true);
+  assertHostReadings(activeSnapshot);
   assert.equal(activeSnapshot.prefillProgress, 0.64);
   assert.equal(activeSnapshot.prefillETASeconds, 0.2);
   assert.equal(activeSnapshot.residentModelCount, 1);
@@ -151,7 +166,47 @@ try {
   assert.equal(invalid.prefillProgress, null, 'Malformed progress must not become 100% complete.');
   assert.equal(invalid.prefillETASeconds, null);
   assert.equal(invalid.residentModels[0].prefillProgress, null);
+  primary = true;
+  flight = {request_id: 'private-primary-request', kind: 'generate', detail: 'generating', token_count: 64, elapsed_seconds: 30, last_activity_age_seconds: 0.1};
+  await delay(550);
+  const dflash = await (await get('/snapshot')).json();
+  assert.equal(dflash.available, true);
+  assert.equal(dflash.phase, 'decode');
+  assert.equal(dflash.completionTokens, 64);
+  assert.equal(dflash.liveDecodeTPS, null, 'Activity elapsed time is not a decode average.');
+  assert.equal(dflash.prefillProgress, null, 'Primary DFlash has no reported prefill fraction.');
+  assert(Number.isFinite(dflash.traceEpoch));
+  assert(!JSON.stringify(dflash).includes('private-primary-request'));
+  primary = false;
+  flight = {request_id: 'private-fallback', processed: 25, total: 100, speed: 100, eta: 0.75};
+  await delay(550);
+  const fallback = await (await get('/snapshot')).json();
+  assert.equal(fallback.phase, 'prefill');
+  assert.equal(fallback.prefillProgress, 0.25);
+  assert.notEqual(fallback.traceEpoch, dflash.traceEpoch);
   await stop(activeService);
+  // Five additional fresh processes exercise real command completion under
+  // Node. These are independent reads, not retries: the first failure stops
+  // verification. The production 1.5-second deadline remains unchanged.
+  if (process.platform === 'darwin') {
+    for (let i = 0; i < 5; i++) {
+      const fresh = start(port);
+      let ready = false;
+      const deadline = performance.now() + 5_000;
+      while (performance.now() < deadline && !fresh.closed) {
+        try { ready = (await get('/health')).status === 200; if (ready) break; } catch {}
+        await delay(25);
+      }
+      assert(ready, `Native-resource test process did not start: ${fresh.log}`);
+      const response = await get('/snapshot');
+      assert.equal(response.status, 200);
+      assertHostReadings(await response.json());
+      await stop(fresh);
+      assert.equal(fresh.result.code, 0);
+    }
+    console.log('PASS: seven fresh packaged Node processes returned real macOS wired, compressed, and swap readings.');
+  }
+  console.log('PASS: packaged DFlash output and fallback transition use reported counters without inventing speed or prefill.');
   console.log('PASS: packaged prefill counters and invalid-progress rejection verified against loopback fixture.');
   console.log('PASS: packaged Node service starts without node_modules; /health, /snapshot, JSONC, authentication, startup errors, and shutdown verified.');
 } finally {

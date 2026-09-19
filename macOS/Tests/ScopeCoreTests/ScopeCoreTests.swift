@@ -105,7 +105,10 @@ actor MockServer {
         case "/admin/api/stats":
             if state == "stats" { throw ConnectionError.unreachable }
             body = ["engines": [:], "active_models": ["models": []], "avg_generation_tps": 22]
-        case "/admin/api/activity": body = ["active_models": ["models": []]]
+        case "/v1/models/status": body = ["models": []]
+        case "/admin/api/activity":
+            if state == "required" { return HTTPResult(data: Data(), status: 401, url: url) }
+            body = ["active_models": ["models": []]]
         default: throw ConnectionError.unreachable
         }
         return HTTPResult(data: try JSONSerialization.data(withJSONObject: body), status: 200, url: url, sessionCookie: cookie)
@@ -122,7 +125,7 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(first.phase, .noModel); XCTAssertEqual(second.phase, .noModel)
         let paths = await server.paths
         XCTAssertEqual(paths.filter { $0 == "/admin/api/activity" }.count, 1)
-        XCTAssertTrue(Set(paths).isSubset(of: ["/health", "/admin/api/login", "/admin/api/activity", "/admin/api/stats"]))
+        XCTAssertTrue(Set(paths).isSubset(of: ["/health", "/admin/api/login", "/admin/api/activity", "/admin/api/stats", "/v1/models/status"]))
     }
     func testBadIdentityNeverReceivesCredential() async throws {
         let server = MockServer(); await server.setState("redirect")
@@ -138,11 +141,15 @@ final class ClientTests: XCTestCase {
         let result = await client.snapshot(connection: Connection(endpoint: try Endpoint("http://127.0.0.1:8000"), apiKey: "key"))
         XCTAssertEqual(result.phase, .noModel); XCTAssertFalse(result.statsFresh)
     }
-    func testMissingKeyMakesNoRequests() async throws {
+    func testKeyFreeMonitoringOnlyWhenTheServerAlreadyAllowsIt() async throws {
         let server = MockServer(), client = OmlxClient { try await server.send($0) }
         let result = await client.snapshot(connection: Connection(endpoint: try Endpoint("http://127.0.0.1:8000"), apiKey: ""))
-        XCTAssertEqual(result.phase, .offline)
-        let paths = await server.paths; XCTAssertTrue(paths.isEmpty)
+        XCTAssertEqual(result.phase, .noModel)
+        let paths = await server.paths; XCTAssertEqual(paths.first, "/health")
+        XCTAssertFalse(paths.contains("/admin/api/login"))
+        await server.setState("required")
+        let denied = await client.snapshot(connection: Connection(endpoint: try Endpoint("http://127.0.0.1:8000"), apiKey: ""))
+        XCTAssertEqual(denied.phase, .offline); XCTAssertTrue(denied.message.contains("API key"))
     }
     func testAuthenticationRejected() async throws {
         let server = MockServer(); await server.setState("auth")

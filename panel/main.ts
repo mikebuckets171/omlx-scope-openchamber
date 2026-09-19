@@ -107,7 +107,7 @@ root.innerHTML = `
     <div><dt>Output tokens</dt><dd id="output">—</dd></div>
     <div><dt>Request elapsed</dt><dd id="elapsed">—</dd></div>
     <div><dt>Last cache lookup</dt><dd id="cache-lookup">—</dd></div>
-  </dl><p class="explanation">Generation is the active request’s reported average; prefill is the runtime’s reported progress speed. Session averages cover completed work across models. Runtime memory guard is not macOS memory pressure. Memory uses GiB (1,024³ bytes). Compressed is physical compressor storage. Missing measurements stay unavailable.</p></details>
+  </dl><p class="explanation">Generation uses the reported request average when available. Otherwise, recent output speed is clearly labelled and measured from token counts. Prefill uses reported progress speed. Session averages cover completed work across models. Runtime memory guard is not macOS memory pressure. Memory uses GiB (1,024³ bytes). Compressed is physical compressor storage. Missing measurements stay unavailable.</p></details>
   </aside></div>
   <details class="connection-help" id="connection-help"><summary>Connection help<span aria-hidden="true">+</span></summary><p id="connection-result" role="status">Check whether OpenChamber has started the extension service. This does not change your configuration.</p><div class="insight-actions"><button id="check-connection" type="button">Check connection</button><button id="connection-guide" type="button">Setup guide</button></div></details>
   <footer><span>OMLX Scope <span id="scope-version"></span></span><span id="freshness">Waiting for first sample</span></footer>
@@ -157,7 +157,8 @@ const phases: Record<TelemetryPhase, string> = { connecting: 'Connecting', recon
 const drawSignal = (now: number, live: boolean, phase: TelemetryPhase): void => {
   signal.prune(now);
   const tracePhase = phase === 'prefill' ? 'prefill' : phase === 'decode' ? 'decode' : signal.points.at(-1)?.phase ?? 'decode';
-  const points = signal.points.filter((point) => point.phase === tracePhase);
+  const basis = signal.points.filter(point => point.phase === tracePhase).at(-1)?.basis;
+  const points = signal.points.filter(point => point.phase === tracePhase && point.basis === basis);
   const geometry = traceGeometry(points, now);
   const group = document.getElementById('trace')!;
   // Reuse path elements when the segment count is unchanged.
@@ -176,7 +177,7 @@ const drawSignal = (now: number, live: boolean, phase: TelemetryPhase): void => 
     cursor.setAttribute('cx', String(geometry.latest.x)); cursor.setAttribute('cy', String(geometry.latest.y));
   } else cursor.setAttribute('hidden', '');
   hidden('chart-empty', points.length > 0);
-  text('chart-title', tracePhase === 'prefill' ? 'Prefill · reported speed' : 'Generation · request average');
+  text('chart-title', tracePhase === 'prefill' ? 'Prefill · reported speed' : basis === 'observed' ? 'Generation · recent output' : 'Generation · request average');
   text('ceiling', `${count(geometry.upper)} tok/s`);
   inspector.update(points, now, geometry.upper);
   text('chart-state', points.length ? live ? 'Live observations' : 'Recent observations · not live' : 'Observed samples only');
@@ -210,7 +211,9 @@ const update = (snapshot: TelemetrySnapshot): void => {
   const phase = current?.phase ?? (last ? 'reconnecting' : snapshot.reason === 'authentication_failed' ? 'offline' : 'connecting');
   const display = current ?? last;
   const stale = current === null;
-  const liveRate = current?.phase === 'decode' ? current.liveDecodeTPS : current?.phase === 'prefill' ? current.livePrefillTPS : null;
+  insightView.update(snapshot);
+  const observedRate = current?.phase === 'decode' && current.liveDecodeTPS === null ? insightView.history.speed : null;
+  const liveRate = current?.phase === 'decode' ? current.liveDecodeTPS ?? observedRate?.tokensPerSecond ?? null : current?.phase === 'prefill' ? current.livePrefillTPS : null;
   shell.dataset.phase = phase;
   shell.dataset.stale = String(stale);
   text('connection', current ? current.phase === 'notLoaded' ? 'oMLX connected · no model loaded' : 'oMLX connected' : snapshot.reason === 'authentication_failed' ? 'Authentication required' : 'Waiting for oMLX');
@@ -219,12 +222,11 @@ const update = (snapshot: TelemetrySnapshot): void => {
   node('model').title = display?.modelID ?? 'Load a model in oMLX to begin monitoring.';
   text('rate', liveRate !== null ? rateNumber.format(liveRate) : phase === 'idle' ? 'Ready' : phase === 'notLoaded' ? 'Standby' : '—');
   node('rate').classList.toggle('is-word', liveRate === null);
-  text('unit', liveRate !== null ? 'tokens / second' : phase === 'idle' ? 'Waiting for your next request' : phase === 'notLoaded' ? 'Load a model in oMLX' : 'No fresh throughput');
+  text('unit', liveRate !== null ? observedRate ? 'tokens / second · recent output' : 'tokens / second' : phase === 'idle' ? 'Waiting for your next request' : phase === 'notLoaded' ? 'Load a model in oMLX' : 'No fresh throughput');
   text('activity', stale ? snapshot.message ?? 'Start oMLX on this host, then refresh.' : current.message ?? (phase === 'idle' ? 'Model loaded. Ready for your next request.' : phase === 'notLoaded' ? 'oMLX is running. Load a model to begin.' : `${count(current.activeRequests)} active · ${current.queuedRequests === null ? 'queue not reported' : current.queuedRequests ? `${current.queuedRequests} queued` : 'queue clear'}`));
   text('notice', stale ? last ? `${age(last.sampledAt)}. Retained details are not live.` : 'Read-only connection · check your local oMLX endpoint and credential.' : '');
   hidden('notice', !stale);
   renderProgress(current);
-  insightView.update(snapshot);
   captureView.update(snapshot);
   const hasOutput = current !== null && ['decode', 'processing'].includes(current.phase) && current.completionTokens !== null;
   hidden('request-output', !hasOutput);
@@ -272,7 +274,7 @@ const update = (snapshot: TelemetrySnapshot): void => {
     document.getElementById('ram-history')!.setAttribute('d', resources.paths('memory', Date.now()));
   }
   text('resource-state', snapshot.system ? 'Whole-host observations' : 'Recent observations · not live');
-  signal.observe(snapshot, efficient ? 3_000 : 500);
+  signal.observe(snapshot, efficient ? 3_000 : 500, observedRate?.tokensPerSecond ?? null);
   if (!compactView) drawSignal(Date.now(), liveRate !== null && !stale, phase);
 };
 

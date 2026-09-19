@@ -5,7 +5,7 @@ it is reported or can be derived from complete observations.
 
 | Reading | Meaning |
 | --- | --- |
-| Token speed | Generation is the active request's reported average; prefill is the runtime's reported progress speed, not an ETA |
+| Token speed | Generation uses the reported request average, or explicitly labelled recent output speed when that average is unavailable; prefill uses reported progress speed, not an ETA |
 | Prefill remaining | `(total - processed) / total × 100` for the current runtime stage; zero/missing/contradictory totals are unavailable |
 | Input context | Reported prompt tokens divided by the model's reported context window; not OpenCode's compaction threshold |
 | Input reused | Verified cached tokens divided by reported prompt tokens |
@@ -152,3 +152,25 @@ part of the prompt and is not subtracted. Missing or contradictory counts suppre
 the readout. This is not OpenCode's configured input/output budget, compaction
 threshold, remaining reasoning allowance, or a guarantee against an allocation
 failure. The selected OpenChamber chat is metadata, not request attribution.
+
+
+## DFlash output
+
+The reviewed oMLX DFlash primary engine reports generation through
+`activities[].token_count`, with a request identifier and freshness information.
+Those are output-token counts, not the number of proposed draft tokens. Scope
+uses them only for one identifiable generation request. It does not divide them
+by the activity's total elapsed time: that interval also includes preparation.
+
+When no request-average speed is reported, the headline shows **recent output**
+after enough fresh counter samples arrive. The extension and Mac app use an
+observed window of up to ten seconds, with at least three samples spanning two
+seconds. This is measured output delivery, not an instantaneous engine speed.
+Pauses, missing/stale data, counter resets, request changes and fallback changes
+break the measurement. Charts do not join observed rates to reported averages.
+
+Primary DFlash does not expose prefill stage counters through the reviewed
+monitoring API. Scope shows that work is in progress, without a made-up percentage
+or estimate. The standard fallback uses the usual prefill display. Input/cache
+and context figures stay unavailable unless their request identity and counters
+can be verified. No draft-acceptance ratio is inferred from completed summaries.

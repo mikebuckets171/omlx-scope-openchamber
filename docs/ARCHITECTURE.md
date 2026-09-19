@@ -36,8 +36,10 @@ defines application scenes. `ScopePreview` is a developer-only renderer and is
 not included in the application bundle.
 
 Native views share one sampler. Public Mach, sysctl, ProcessInfo, and
-IOPowerSources APIs supply host readings. New API keys use Keychain; non-secret
-preferences use UserDefaults. The app and extension do not share a hidden IPC
+IOPowerSources APIs supply host readings. New API keys stay in memory by default;
+optional Keychain operations run through a serial actor only after explicit user
+actions. Non-secret preferences use UserDefaults. OpenCode connection discovery
+uses a bounded JSONC reader; the app never creates a plaintext key store. The app and extension do not share a hidden IPC
 bridge and never modify each other.
 
 Update traffic has a separate ephemeral HTTPS session. Preview builds do not link
@@ -57,6 +59,10 @@ Missing or inconsistent values remain unavailable. No code controls inference,
 changes runtime settings, disables platform security, or polls private sensors.
 
 ## Verification
+
+Both normalizers consume shared synthetic oMLX fixtures. JSONC cases cover both
+parsers; native tests inject a credential store to assert zero startup/polling
+Keychain operations. See [compatibility coverage](COMPATIBILITY.md).
 
 CI runs TypeScript tests/builds, extracted-package smoke checks, Chromium/WebKit
 interaction tests, native Swift tests, bundle validation, and native fixture

@@ -15,6 +15,7 @@ func renderPreviews() async throws {
     runtime.decodeAverage = 23.1; runtime.prefillAverage = 310; runtime.cacheEfficiency = 81
     runtime.modelBytes = 18_600_000_000; runtime.processBytes = 31_000_000_000
     runtime.ramCacheBytes = 2_500_000_000; runtime.ssdCacheBytes = 24_000_000_000
+    runtime.prompt = 48000; runtime.reused = 32000; runtime.contextWindow = 131072
     runtime.statsFresh = true; runtime.message = "Current request average · not instantaneous speed"
     var host = HostReading()
     host.cpu = 18; host.totalBytes = 48 * 1_073_741_824; host.nonFreeBytes = 36.7 * 1_073_741_824
@@ -101,6 +102,12 @@ func renderPreviews() async throws {
         try await export(OverviewContent(model: model).padding(24).frame(width: 850), name: "overview-prefill-\(theme)", width: 850, scheme: scheme)
         model.runtime.progressStale = true
         try await export(MenuPopover(model: model), name: "menu-prefill-held-\(theme)", width: 345, scheme: scheme)
+        var dflash = runtime
+        dflash.rate = nil; dflash.observedRate = 32; dflash.prompt = nil; dflash.reused = nil
+        dflash.model = "Qwen · DFlash preview"
+        model.runtime = dflash
+        try await export(MenuPopover(model: model), name: "menu-dflash-\(theme)", width: 345, scheme: scheme)
+        try await export(MenuBarLabel(model: model).padding(8).frame(width: 150, height: 38), name: "menubar-dflash-\(theme)", width: 150, scheme: scheme)
         model.runtime = runtime
     }
     model.togglePause()

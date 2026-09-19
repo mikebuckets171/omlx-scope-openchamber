@@ -20,7 +20,7 @@ final class ScopeMacTests: XCTestCase {
         for path in [".omlx", ".local/share/opencode"] { try FileManager.default.createDirectory(at: root.appendingPathComponent(path), withIntermediateDirectories: true) }
         try Data(#"{"server":{"port":8001}}"#.utf8).write(to: root.appendingPathComponent(".omlx/settings.json"))
         try Data(#"{"omlx":{"type":"api","key":"fixture"},"cloud":{"key":"never-use"}}"#.utf8).write(to: root.appendingPathComponent(".local/share/opencode/auth.json"))
-        let saved = SavedConnection.discover(home: root)
+        let saved = SavedConnection.discover(home: root, environment: [:])
         XCTAssertEqual(saved.endpoint, "http://127.0.0.1:8001"); XCTAssertEqual(saved.key, "fixture")
     }
     @MainActor func testPauseAndMenuPresentation() {

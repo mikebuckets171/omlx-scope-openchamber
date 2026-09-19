@@ -226,6 +226,7 @@ const matchingModel = (models: JsonObject[], preferredModel: string | null): Jso
   models.find((model) => Array.isArray(model.generating) && model.generating.length > 0)
     ?? models.find((model) => Array.isArray(model.prefilling) && model.prefilling.length > 0)
     ?? models.find((model) => (nonnegative(model.active_requests) ?? 0) > 0)
+    ?? models.find((model) => arrayOfObjects(model.activities).length > 0)
     ?? models.find((model) => model.is_loading === true)
     ?? (preferredModel === null ? undefined : models.find((model) => model.id === preferredModel))
     ?? models[0]
@@ -319,7 +320,7 @@ const normalizeFlights = (model: JsonObject | null, lookup: JsonObject, ambiguou
   const waiting = arrayOfObjects(model.waiting);
   const prefilling = arrayOfObjects(model.prefilling);
   const generatingFlights = arrayOfObjects(model.generating);
-  if (prefilling.length + generatingFlights.length > 1 || (nonnegative(model.active_requests) ?? 0) > 1) {
+  if (prefilling.length + generatingFlights.length + arrayOfObjects(model.activities).length > 1 || (nonnegative(model.active_requests) ?? 0) > 1) {
     return { ...summary, phase: 'processing', message: 'Concurrent requests · per-request speed withheld' };
   }
 
@@ -384,11 +385,26 @@ const normalizeFlights = (model: JsonObject | null, lookup: JsonObject, ambiguou
     };
   }
 
-  if (arrayOfObjects(model.activities).length > 0 && summary.phase === 'idle') {
+  const activity = arrayOfObjects(model.activities)[0];
+  if (activity && summary.phase === 'idle') {
+    // DFlash primary mode reports accepted output through ActivityTrackingMixin.
+    // Its elapsed time includes preparation/prefill, so dividing tokens by it
+    // would mislabel end-to-end throughput as generation speed.
+    const generated = activity.kind === 'generate' ? tokenCount(activity.token_count) : null;
+    const elapsed = nonnegative(activity.elapsed_seconds);
+    const age = nonnegative(activity.last_activity_age_seconds);
+    const fresh = generated !== null && generated > 0 && elapsed !== null && elapsed > 0
+      && age !== null && age <= 5 && text(activity.request_id) !== null;
     summary = {
       ...summary,
-      phase: 'processing',
-      message: 'Runtime active · detailed token progress unavailable',
+      phase: fresh ? 'decode' : 'processing',
+      completionTokens: generated,
+      elapsedSeconds: elapsed,
+      processingElapsed: elapsed,
+      message: fresh ? 'Output arriving · request-average speed not reported'
+        : generated !== null && generated > 0 ? 'Waiting for fresh output'
+        : activity.kind === 'generate' ? 'Working · this engine does not report prefill percentage'
+        : 'Runtime active · detailed token progress unavailable',
     };
   }
   if ((nonnegative(model.active_requests) ?? 0) > 0 && summary.phase === 'idle') {
@@ -492,7 +508,7 @@ export const normalizeOmlxTelemetry = (
     active = freshActive;
   }
 
-  if (active === null || !Array.isArray(active.models)) return null;
+  if (active === null || !Array.isArray(active.models) || active.models.some((model) => asObject(model) === null)) return null;
   const models = arrayOfObjects(active.models);
   const model = matchingModel(models, preferredModel);
   const modelID = text(model?.id);
@@ -503,7 +519,7 @@ export const normalizeOmlxTelemetry = (
         ? models.reduce((total, item) => total + nonnegative(item.active_requests)!, 0)
         : null);
   const activeModelCount = models.filter((item) => (
-    (arrayOfObjects(item.prefilling).length + arrayOfObjects(item.generating).length > 0)
+    (arrayOfObjects(item.prefilling).length + arrayOfObjects(item.generating).length + arrayOfObjects(item.activities).length > 0)
       || (nonnegative(item.active_requests) ?? 0) > 0
   )).length;
   const ambiguous = activeModelCount > 1 || (activeRequests !== null && activeRequests > 1);
@@ -543,7 +559,7 @@ export const normalizeOmlxTelemetry = (
     liveDecodeTPS: flight.liveDecodeTPS,
     livePrefillTPS: flight.livePrefillTPS,
     sessionAverageDecodeTPS: firstNumber(statsData.avg_generation_tps),
-    sessionCacheEfficiencyPercent: firstNumber(statsData.cache_efficiency),
+    sessionCacheEfficiencyPercent: (nonnegative(statsData.cache_efficiency) ?? Infinity) <= 100 ? nonnegative(statsData.cache_efficiency) : null,
     promptTokens: flight.promptTokens,
     cachedTokens: flight.cachedTokens,
     completionTokens: flight.completionTokens,
