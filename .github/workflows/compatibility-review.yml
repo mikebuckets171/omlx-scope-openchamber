@@ -1,0 +1,53 @@
+name: Compatibility review
+on:
+  push:
+    branches: [work/v0.5.8]
+    paths: [.github/workflows/compatibility-review.yml]
+permissions:
+  contents: read
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+      - name: Resolve the current supported SDK
+        run: bun install --frozen-lockfile && bun add --exact @openchamber/sdk@1.24.2
+      - name: Collect tagged upstream contracts for review
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64,hashlib,json,os,subprocess
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'compatibility-inputs'; root.mkdir()
+          records=[]
+          sources={
+            ('jundot/omlx','v0.6.4'):['omlx/admin/routes.py','omlx/admin/auth.py','omlx/server.py','apps/omlx-mac/Sources/Menubar/MenubarStatsPoller.swift'],
+            ('openchamber/openchamber','v1.24.2'):['packages/sdk/package.json','packages/sdk/src/contract.ts','packages/sdk/src/host.ts','packages/sdk/API.md','packages/sdk/GUEST_SERVICES.md','packages/ui/src/components/chat/work-status/WorkStatusTelemetrySection.tsx']
+          }
+          for (repo,tag),paths in sources.items():
+              commit=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/commits/{tag}']))['sha']
+              for path in paths:
+                  result=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/contents/{path}?ref={commit}']))
+                  data=base64.b64decode(result['content'])
+                  assert hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()==result['sha']
+                  destination=root/repo/path;destination.parent.mkdir(parents=True,exist_ok=True);destination.write_bytes(data)
+                  records.append({'repository':repo,'tag':tag,'commit':commit,'path':path,'blob':result['sha']})
+          (root/'sources.json').write_text(json.dumps(records,indent=2)+'\n')
+          PY
+          tar -czf "$RUNNER_TEMP/compatibility-inputs.tgz" -C "$RUNNER_TEMP" compatibility-inputs
+          tar -czf "$RUNNER_TEMP/sdk-review.tgz" node_modules package.json bun.lock
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: compatibility-inputs
+          path: |
+            ${{ runner.temp }}/compatibility-inputs.tgz
+            ${{ runner.temp }}/sdk-review.tgz
+          retention-days: 3
+          if-no-files-found: error
