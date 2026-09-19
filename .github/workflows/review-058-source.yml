@@ -1,0 +1,23 @@
+name: Review compatibility source
+on:
+  push:
+    branches: [work/v0.5.8]
+    paths: [.github/workflows/review-058-source.yml]
+permissions:
+  contents: read
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - name: Archive tracked source only
+        run: git archive --format=zip --output="$RUNNER_TEMP/review-source.zip" HEAD
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: review-source
+          path: ${{ runner.temp }}/review-source.zip
+          retention-days: 3
+          if-no-files-found: error
