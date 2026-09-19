@@ -64,7 +64,7 @@ const requestJSON = async ({
     throw new OmlxFailure('runtime_unreachable', 'The oMLX runtime returned an unsafe response.');
   }
   if (response.status === 401 || response.status === 403) {
-    throw new OmlxFailure('authentication_failed', 'The oMLX runtime rejected its saved credential.');
+    throw new OmlxFailure('authentication_failed', 'oMLX requires a valid API key or rejected the supplied key.');
   }
   if (response.status !== 200) {
     throw new OmlxFailure('runtime_unreachable', `The oMLX runtime returned HTTP ${response.status}.`);
@@ -246,6 +246,11 @@ export class OmlxClient {
       if (this.cookie === null && config.apiKey !== null) this.cookie = await this.login(config.baseURL, config.apiKey, timeoutFor());
 
       const readStatus = this.monotonicNow() - this.modelStatusAt >= 60_000;
+      if (readStatus) {
+        // Limit attempts even when another request in this collection fails.
+        this.modelStatusAt = this.monotonicNow();
+        this.contextWindows = new Map();
+      }
       const readSessionStats = this.monotonicNow() - this.statsAt >= 3_000;
       const activityPromise = this.readActivity(config.baseURL, this.cookie, timeoutFor());
       const statusPromise = readStatus

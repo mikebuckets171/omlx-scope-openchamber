@@ -1,0 +1,37 @@
+name: Rebuild reviewed service
+on:
+  push:
+    branches: [work/v0.5.8]
+    paths: [.github/workflows/rebuild-service.yml]
+permissions:
+  contents: write
+jobs:
+  bundle:
+    if: github.repository == 'mikebuckets171/omlx-scope-openchamber' && github.ref == 'refs/heads/work/v0.5.8'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+      - name: Verify source and build the bundle
+        run: |
+          set -euo pipefail
+          echo 'a655d1455ed808528df500b77806ba5d18c4cb2ae3ed28a6183f7e8dc1d5b15a  service/omlx-client.ts' | sha256sum -c -
+          echo '42801d850bae80a6435df63fc19a260866ff7aeea1758fd563674ff622787257  service/optional-reads.test.ts' | sha256sum -c -
+          bun install --frozen-lockfile
+          bun run check
+      - name: Commit only the regenerated service
+        run: |
+          set -euo pipefail
+          echo '97ead4156d0e1219527d1a742d9a962db2e6b5b88f86d0e731ba6cc5c708403c  service/main.js' | sha256sum -c -
+          git diff --exit-code -- . ':!service/main.js'
+          git fetch origin work/v0.5.8
+          test "$(git rev-parse FETCH_HEAD)" = "$GITHUB_SHA"
+          git add service/main.js
+          git rm .github/workflows/rebuild-service.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Rebuild service with bounded optional reads'
+          git push origin HEAD:work/v0.5.8
