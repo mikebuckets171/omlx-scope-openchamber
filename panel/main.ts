@@ -357,7 +357,7 @@ const actionStatus = (message: string): void => {
   statusTimer = message ? setTimeout(() => { hidden('action-status', true); statusTimer = null; }, 8_000) : null;
 };
 const captureView = new CaptureView(shell, text => host.writeClipboard(text), actionStatus, version);
-const sharing = new SharingControls(node('share-actions'), host, () => [measurementReport(latest, lastSystem, userPaused || awaitingFresh, version), captureView.report()].filter(Boolean).join('\n\n'), actionStatus);
+const sharing = new SharingControls(node('share-actions'), host, () => [measurementReport(latest, lastSystem, userPaused ? true : awaitingFresh ? 'refreshing' : false, version), captureView.report()].filter(Boolean).join('\n\n'), actionStatus);
 const applyPreference = (key: PreferenceKey, value: boolean): void => {
   if (disposed) return;
   if (key === 'efficient') {

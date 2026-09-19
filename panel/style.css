@@ -18,12 +18,12 @@ button, summary { -webkit-tap-highlight-color: transparent; touch-action: manipu
 button:focus-visible, summary:focus-visible, [role="slider"]:focus-visible { outline: 2px solid var(--scope-accent); outline-offset: 4px; }
 .scope { max-width: 880px; margin: auto; padding: 25px 24px 16px; font-size: 12px; line-height: 1.5; }
 h1, h2, p, figure, dl { margin: 0; }
-.masthead, .brand, .connection, .model-line, .chart-top, figcaption, .section-heading, /* Help stays out of the main readout and makes no requests until clicked. */
+.masthead, .brand, .connection, .model-line, .chart-top, figcaption, .section-heading, footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+/* Help stays out of the main readout and makes no requests until clicked. */
 .connection-help { margin-top:24px; border-top:1px solid var(--scope-line); }
 .connection-help summary { justify-content:flex-start; gap:10px; }
 .connection-help p { max-width:68ch; font-size:12px; line-height:1.6; color:var(--oc-muted); }
 .connection-help .insight-actions button { min-height:32px; font-size:11px; }
-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .brand { justify-content: flex-start; gap: 10px; }
 .scope-mark { width: 26px; height: 26px; fill: none; stroke: var(--scope-accent); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
 .scope-mark circle { opacity: .45; }

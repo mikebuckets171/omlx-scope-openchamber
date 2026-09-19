@@ -18,6 +18,29 @@ test('responsive layouts preserve metrics in both themes', async ({ page }, info
     await expect(frame.locator('#swap')).toHaveText('1.1 GiB');
     const overflow = await frame.locator('main').evaluate(() => document.documentElement.scrollWidth > innerWidth);
     expect(overflow, `${theme}/${width} overflows`).toBe(false);
+    // Text presence alone cannot catch a broken shared layout selector.
+    for (const selector of ['.masthead', '.brand', '.connection', '.model-line', '.chart-top', 'figcaption', '.section-heading']) {
+      for (const row of await frame.locator(selector).all()) {
+        await expect(row, `${theme}/${width}: ${selector}`).toHaveCSS('display', 'flex');
+      }
+    }
+    const alignment = await frame.locator('.masthead').evaluate(el => {
+      const brand = el.querySelector('.brand')!.getBoundingClientRect();
+      const controls = el.querySelector('.monitor-controls')!.getBoundingClientRect();
+      return { centerDelta: Math.abs(brand.y + brand.height / 2 - controls.y - controls.height / 2),
+        clear: brand.right <= controls.left };
+    });
+    expect(alignment.centerDelta, `${theme}/${width}: header alignment`).toBeLessThan(2);
+    expect(alignment.clear, `${theme}/${width}: header controls overlap the name`).toBe(true);
+    for (const selector of ['.model-line', '.chart-top', 'figcaption']) {
+      for (const row of await frame.locator(selector).all()) {
+        const overlap = await row.evaluate(el => {
+          const children = Array.from(el.children).filter(child => child.getBoundingClientRect().width > 0);
+          return children.length >= 2 && children[0].getBoundingClientRect().right > children.at(-1)!.getBoundingClientRect().left;
+        });
+        expect(overlap, `${theme}/${width}: ${selector} labels overlap`).toBe(false);
+      }
+    }
     await page.screenshot({ path: info.outputPath(`${theme}-${width}.png`), fullPage: true });
   }
 });
@@ -559,7 +582,7 @@ test('returning to a hidden panel with a pending request never presents old spee
   await frame.getByRole('button',{name:'Share',exact:true}).click();
   await frame.getByRole('menuitem',{name:'Copy stats',exact:true}).click();
   await expect(frame.locator('#action-status')).toContainText('Stats copied');
-  expect(await page.evaluate(() => (window as any).previewCopied)).toContain('held observations');
+  expect(await page.evaluate(() => (window as any).previewCopied)).toContain('refreshing — held observations');
 });
 
 test('an unopened host shows setup guidance rather than an endless loading claim', async ({page}) => {

@@ -63,7 +63,7 @@ export class ChartInspector {
       this.plot.setAttribute('aria-valuetext', label);
       this.output.textContent = point ? label : 'Point to inspect · arrow keys when focused';
     } else {
-      this.plot.removeAttribute('aria-valuenow');
+      this.plot.setAttribute('aria-valuenow', '0');
       this.plot.setAttribute('aria-valuetext', 'No observations yet');
       this.output.textContent = 'History appears as readings arrive';
     }

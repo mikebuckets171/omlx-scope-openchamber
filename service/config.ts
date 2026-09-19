@@ -131,7 +131,7 @@ export const parseLoopbackOrigin = (value: unknown, stripPath = false): URL | nu
   } catch {
     return null;
   }
-  if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.port.length === 0 || Number(url.port) < 1) return null;
+  if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.port === '0') return null;
   if (url.username || url.password || url.search || url.hash) return null;
   if (url.pathname !== '' && url.pathname !== '/' && (!stripPath || !['/v1', '/v1/'].includes(url.pathname))) return null;
   url.pathname = '/';

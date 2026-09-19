@@ -160,3 +160,8 @@ it('bounds real configuration reads without silently falling back', async () => 
     expect((await resolveOmlxConfig({home, env:{}})).issue).toBe('unreadable_config');
   } finally { await rm(home, {recursive:true,force:true}); }
 });
+
+it('explicit HTTP default port remains a valid loopback endpoint', () => {
+  expect(parseLoopbackOrigin('http://127.0.0.1:80')?.origin).toBe('http://127.0.0.1');
+  expect(parseLoopbackOrigin('http://127.0.0.1:0')).toBeNull();
+});
