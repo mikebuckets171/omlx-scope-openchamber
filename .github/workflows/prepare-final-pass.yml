@@ -1,0 +1,67 @@
+name: Prepare reviewed package
+on:
+  push:
+    branches: [work/openchamber-final-pass]
+    paths: [.github/workflows/prepare-final-pass.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    if: github.repository == 'mikebuckets171/omlx-scope-openchamber' && github.ref == 'refs/heads/work/openchamber-final-pass'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+      - name: Apply reviewed source changes with exact before and after checksums
+        run: |
+          python3 - <<'PY'
+          import base64,hashlib,json,subprocess
+          from pathlib import Path
+          blob=json.loads(subprocess.check_output(['gh','api','repos/mikebuckets171/omlx-scope-openchamber/git/blobs/56fe26276c1568e262b37fd76e5c78a361e1172e']))
+          changes=json.loads(base64.b64decode(blob['content']))
+          expected={'package.json','panel/capture.ts','panel/main.ts','panel/style.css','scripts/verify-package.ts','tests/browser/preview.ts','CHANGELOG.md','README.md','SECURITY.md','PRIVACY.md','docs/METRICS.md'}
+          assert set(changes)==expected
+          for name,change in changes.items():
+              path=Path(name);text=path.read_text()
+              assert hashlib.sha256(text.encode()).hexdigest()==change['before'], f'Unexpected source: {name}'
+              for start,end,replacement in reversed(change['edits']):
+                  assert 0<=start<=end<=len(text)
+                  text=text[:start]+replacement+text[end:]
+              assert hashlib.sha256(text.encode()).hexdigest()==change['after'], f'Unexpected result: {name}'
+              path.write_text(text)
+          reviewed={'panel/capture-view.ts':'30e64a782365e8fca545eeba94cca1338f4c2d6aa4c1853a153554e6a9e9c776','panel/reply-capture.ts':'96e2d446e49fc07047e28cefab743002f27cd6d79cff632bfd9f56d99212afe7','panel/reply-capture.test.ts':'f9496f1d86fe7ff3303b6eb9834f1b22502301150905cd78f40671d75c95a8ad','scripts/package-docs.ts':'03591d623fb204cd5d6fec3962df20f4a1ed1e78276e0f577357fb5c1e7e92da','scripts/package-docs.test.ts':'29efd7c06a865818badfe32808bfea92d18032aba43aeab14a7566a2c08dbbea'}
+          for name,digest in reviewed.items():
+              assert hashlib.sha256(Path(name).read_bytes()).hexdigest()==digest, name
+          PY
+      - name: Type-check, test and rebuild packages
+        run: bun install --frozen-lockfile && bun run check
+      - name: Verify unchanged host integration
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,subprocess
+          from pathlib import Path
+          assert hashlib.sha256(Path('panel/main.js').read_bytes()).hexdigest()=='f9e73ef7ed20a3624204f212e1ad4b36044bb426be63b3a1277af9be8cf251db'
+          before=json.loads(subprocess.check_output(['git','show','702816b0bdf8519b7ac7a93add364e51225f0cb4:package.json']))
+          after=json.loads(Path('package.json').read_text())
+          for key in ['dependencies','devDependencies','openchamber','files']: assert before[key]==after[key],key
+          assert after['version']=='0.5.7'
+          PY
+          git diff --exit-code 702816b0bdf8519b7ac7a93add364e51225f0cb4 -- service bun.lock macOS
+      - name: Commit verified source and generated bundle
+        run: |
+          set -euo pipefail
+          git fetch origin work/openchamber-final-pass
+          test "$(git rev-parse FETCH_HEAD)" = "$GITHUB_SHA"
+          git rm .github/workflows/prepare-final-pass.yml .github/workflows/review-source.yml
+          git add package.json panel scripts/verify-package.ts tests/browser/preview.ts CHANGELOG.md README.md SECURITY.md PRIVACY.md docs/METRICS.md
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Add next-reply captures and refine the OpenChamber monitor'
+          git push origin HEAD:work/openchamber-final-pass
