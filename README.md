@@ -39,6 +39,9 @@ Uses OpenChamber’s documented panel, full-page, theme, storage, clipboard, and
 composition APIs. No host patches. Runtime observations remain **server-wide**;
 they are not guaranteed to belong to the selected chat.
 
+OpenChamber’s **Turn Stats** remains its per-turn view. Scope adds live server
+readings alongside it; it does not attach server activity to individual turns.
+
 ## Install
 
 ### OpenChamber extension
