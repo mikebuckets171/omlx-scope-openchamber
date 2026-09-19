@@ -2,11 +2,11 @@
 
 ## 0.5.7 — 2026-09-19
 
-- Inspect recorded throughput with the pointer or keyboard, without extra polling.
+- Point at the speed chart to inspect earlier readings, or use the arrow keys.
 - Check the extension connection from the monitor and open the setup guide.
-- Wait for fresh readings after returning to the panel; preserve pause and chart history.
+- Keep previous readings clearly marked while a hidden or restored panel reconnects.
 - Refine spacing, chart proportions, labels, and narrow-panel readability.
-- Bound local configuration reads and reject noncanonical loopback addresses.
+- Limit configuration-file reads and validate local server addresses.
 - Clarify installation, platform support, permissions, and contribution guidance.
 
 Mac signing status is unchanged: the companion is a preview with manual installation.
