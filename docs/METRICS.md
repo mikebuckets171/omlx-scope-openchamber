@@ -7,8 +7,8 @@ it is reported or can be derived from complete observations.
 | --- | --- |
 | Token speed | Generation is the active request's reported average; prefill is the runtime's reported progress speed, not an ETA |
 | Prefill remaining | `(total - processed) / total × 100` for the current runtime stage; zero/missing/contradictory totals are unavailable |
-| Context | Reported prompt tokens divided by the model's reported context window; not OpenCode's compaction threshold |
-| Prefix reused | Verified cached tokens divided by reported prompt tokens |
+| Input context | Reported prompt tokens divided by the model's reported context window; not OpenCode's compaction threshold |
+| Input reused | Verified cached tokens divided by reported prompt tokens |
 | Requests | Server-wide active and queued counts; unknown counts are not zero |
 | Server session | Completed-work aggregates across models, since the server's statistics reset |
 | CPU | Change in non-idle time across all logical cores between host observations |
@@ -44,6 +44,13 @@ runtime request or inference operation.
 
 ## History and freshness
 
+Point at the throughput chart or focus it and use the arrow keys to inspect an
+actual saved reading. Home and End select the oldest and newest visible sample;
+Escape returns to the normal chart. The readout shows that sample’s time and
+reported rate, not an interpolated estimate. Selection stays on the same reading
+as new samples arrive, until it falls outside the 90-second window. This adds no
+network request and records nothing beyond the existing bounded chart history.
+
 Inference and host charts have a fixed 90-second time window. Throughput starts
 at zero; host percentages use a fixed 0–100% scale. Pauses, connection loss,
 missing values, request changes, and large sampling gaps break the trace.
@@ -73,7 +80,7 @@ The host resource sampler uses Node's public OS APIs and macOS command-line
 utilities. No private GPU, thermal, fan, or memory-pressure API is used.
 
 
-## Session insights (0.5.4)
+## Session insights
 
 **Stage estimate** comes from oMLX's `prefilling[].eta`, provided with valid
 processed/total counters and positive reported speed. It is rounded up for display,

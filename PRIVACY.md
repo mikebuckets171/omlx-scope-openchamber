@@ -42,3 +42,7 @@ analytics or update server.
 Copied diagnostics describe versions, measurement availability, and connection
 state. Do not attach credentials, auth files, raw runtime responses, or private
 chat screenshots to public issues. Review anything you choose to share.
+
+The extension opens the setup guide on GitHub only when you choose **Setup guide**.
+It does not include readings or credentials in that URL. **Check connection**
+asks OpenChamber for its local service status; it does not contact another server.

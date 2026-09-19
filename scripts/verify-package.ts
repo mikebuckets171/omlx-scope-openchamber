@@ -1,5 +1,5 @@
 import { parseManifestJson } from '@openchamber/sdk/schemas';
-import { dirname, join } from 'node:path';
+import { dirname, join, posix } from 'node:path';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -20,6 +20,16 @@ for (const entry of entries) {
   const file = Bun.file(join(root, entry));
   if (!await file.exists()) throw new Error(`Missing package entry: ${entry}`);
   bytes += file.size;
+}
+// Docs travel in the installation ZIP. Relative links must work there too.
+for (const entry of entries.filter(name => name.endsWith('.md'))) {
+  const markdown = (await Bun.file(join(root, entry)).text()).replace(/```[\s\S]*?```/g, '');
+  for (const match of markdown.matchAll(/\[[^\]]+\]\(([^)\s]+)\)/g)) {
+    const href = match[1]!;
+    if (/^(?:[a-z][a-z0-9+.-]*:|#|\/\/)/i.test(href)) continue;
+    const target = posix.normalize(posix.join(posix.dirname(entry), decodeURIComponent(href.split(/[?#]/)[0]!)));
+    if (!entries.includes(target)) throw new Error(`Broken package link in ${entry}: ${href}`);
+  }
 }
 const panel = await Bun.file(join(root, 'panel/main.js')).text();
 if (['node:os', 'node:fs', 'node:child_process', 'OMLX_SCOPE_API_KEY', '/usr/bin/vm_stat', '/usr/sbin/sysctl'].some((secret) => panel.includes(secret))) throw new Error('Host-only code leaked into the panel');

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.7 — 2026-09-19
+
+- Point at the speed chart to inspect earlier readings, or use the arrow keys.
+- Check the extension connection from the monitor and open the setup guide.
+- Keep previous readings clearly marked while a hidden or restored panel reconnects.
+- Refine spacing, chart proportions, labels, and narrow-panel readability.
+- Limit configuration-file reads and validate local server addresses.
+- Clarify installation, platform support, permissions, and contribution guidance.
+
+Mac signing status is unchanged: the companion is a preview with manual installation.
+
 ## 0.5.6 — 2026-09-18
 
 - Follow OpenChamber’s active theme, including accent colors and live theme changes.

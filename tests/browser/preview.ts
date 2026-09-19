@@ -18,6 +18,29 @@ test('responsive layouts preserve metrics in both themes', async ({ page }, info
     await expect(frame.locator('#swap')).toHaveText('1.1 GiB');
     const overflow = await frame.locator('main').evaluate(() => document.documentElement.scrollWidth > innerWidth);
     expect(overflow, `${theme}/${width} overflows`).toBe(false);
+    // Text presence alone cannot catch a broken shared layout selector.
+    for (const selector of ['.masthead', '.brand', '.connection', '.model-line', '.chart-top', 'figcaption', '.section-heading']) {
+      for (const row of await frame.locator(selector).all()) {
+        await expect(row, `${theme}/${width}: ${selector}`).toHaveCSS('display', 'flex');
+      }
+    }
+    const alignment = await frame.locator('.masthead').evaluate(el => {
+      const brand = el.querySelector('.brand')!.getBoundingClientRect();
+      const controls = el.querySelector('.monitor-controls')!.getBoundingClientRect();
+      return { centerDelta: Math.abs(brand.y + brand.height / 2 - controls.y - controls.height / 2),
+        clear: brand.right <= controls.left };
+    });
+    expect(alignment.centerDelta, `${theme}/${width}: header alignment`).toBeLessThan(2);
+    expect(alignment.clear, `${theme}/${width}: header controls overlap the name`).toBe(true);
+    for (const selector of ['.model-line', '.chart-top', 'figcaption']) {
+      for (const row of await frame.locator(selector).all()) {
+        const overlap = await row.evaluate(el => {
+          const children = Array.from(el.children).filter(child => child.getBoundingClientRect().width > 0);
+          return children.length >= 2 && children[0].getBoundingClientRect().right > children.at(-1)!.getBoundingClientRect().left;
+        });
+        expect(overlap, `${theme}/${width}: ${selector} labels overlap`).toBe(false);
+      }
+    }
     await page.screenshot({ path: info.outputPath(`${theme}-${width}.png`), fullPage: true });
   }
 });
@@ -25,12 +48,12 @@ test('responsive layouts preserve metrics in both themes', async ({ page }, info
 test('polling preserves controls, focus and open details', async ({ page }) => {
   const frame = await openPanel(page);
   const original = await frame.locator('#refresh').elementHandle();
-  await frame.locator('summary').click();
-  await frame.locator('summary').focus();
+  await frame.locator('.details summary').click();
+  await frame.locator('.details summary').focus();
   await page.waitForTimeout(1_100);
   expect(await original!.evaluate(el => el.isConnected)).toBe(true);
-  await expect(frame.locator('details')).toHaveJSProperty('open', true);
-  await expect(frame.locator('summary')).toBeFocused();
+  await expect(frame.locator('.details')).toHaveJSProperty('open', true);
+  await expect(frame.locator('.details summary')).toBeFocused();
   await frame.locator('#refresh').click();
   await expect(frame.locator('#refresh')).toBeEnabled();
 });
@@ -486,4 +509,118 @@ test('Share remains anchored, closes outside, and does not shift the monitor', a
   await expect(menu).toBeHidden();
   expect(await page.evaluate(() => (window as any).previewComposed)).toBeNull();
   expect(await page.evaluate(() => (window as any).previewCopied)).toBe('');
+});
+
+test('history inspection keeps a recorded value selected without extra polling', async ({page}, info) => {
+  const frame = await openPanel(page);
+  await page.waitForTimeout(1_200);
+  await frame.locator('#pause').click();
+  const before = await requests(page);
+  const history = frame.getByRole('slider',{name:'Inspect throughput history'});
+  await history.focus(); await history.press('Home');
+  await expect(frame.locator('#history-reading')).toContainText('tok/s');
+  await expect(history).toHaveAttribute('aria-valuenow','0');
+  const oldest = await frame.locator('#history-reading').textContent();
+  await history.press('End');
+  await expect(frame.locator('#history-reading')).not.toHaveText(oldest!);
+  await expect(frame.locator('#inspect-dot')).not.toHaveAttribute('hidden','');
+  await history.press('Escape');
+  await expect(frame.locator('#history-reading')).toContainText('Point to inspect');
+  await expect(frame.locator('#inspect-dot')).toHaveAttribute('hidden','');
+  expect(await requests(page)).toBe(before);
+  await history.press('Home');
+  await frame.locator('main').screenshot({path:info.outputPath('history-inspection.png')});
+});
+
+test('connection help uses the supported status call only on demand', async ({page}) => {
+  for (const status of ['ready','starting','stopped','failed']) {
+    const frame = await openPanel(page,`state=offline&service=${status}`);
+    expect(await page.evaluate(() => (window as any).previewStatusChecks)).toBe(0);
+    await frame.locator('#pause').click();
+    const before = await requests(page);
+    await frame.locator('#connection-help summary').click();
+    await frame.locator('#check-connection').click();
+    const expected = {ready:'If readings are missing',starting:'starting',stopped:'stopped',failed:'could not start'}[status]!;
+    await expect(frame.locator('#connection-result')).toContainText(expected);
+    await expect(frame.locator('#check-connection')).toBeEnabled();
+    expect(await page.evaluate(() => (window as any).previewStatusChecks)).toBe(1);
+    expect(await requests(page)).toBe(before);
+  }
+});
+
+test('denied connection checks do not expose raw errors or change runtime state', async ({page}) => {
+  const frame = await openPanel(page,'denied=1&state=offline');
+  await frame.locator('#connection-help summary').click();
+  await frame.locator('#check-connection').click();
+  await expect(frame.locator('#connection-result')).toContainText('Approve');
+  await expect(frame.locator('main')).not.toContainText('fixture detail');
+  await frame.locator('#connection-guide').click();
+  await expect.poll(() => page.evaluate(() => (window as any).previewOpenedURL)).toMatch(/^https:\/\/github.com\/mikebuckets171\/omlx-scope-openchamber\/blob\/v[\d.]+\/docs\/CONFIGURATION.md$/);
+  expect(await page.evaluate(() => (window as any).previewUnexpectedSends)).toBe(0);
+});
+
+test('returning to a hidden panel with a pending request never presents old speed as live', async ({page}) => {
+  const frame = await openPanel(page,'state=prefill');
+  await expect(frame.locator('#prefill-remaining')).toHaveText('36% remaining');
+  await frame.locator('main').evaluate(() => {
+    Object.defineProperty(document,'hidden',{configurable:true,value:true});
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.evaluate(() => { (window as any).previewHold=true; });
+  await frame.locator('main').evaluate(() => {
+    Object.defineProperty(document,'hidden',{configurable:true,value:false});
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect(frame.locator('#rate')).toHaveText('—');
+  await expect(frame.locator('#prefill-state')).toHaveText('Refreshing · last reading');
+  await expect(frame.locator('#prefill-estimate')).toBeHidden();
+  await expect(frame.locator('#capture-start')).toBeDisabled();
+  await frame.locator('#compact').click();
+  await frame.locator('#compact').click();
+  await expect(frame.locator('#rate')).toHaveText('—');
+  await expect(frame.locator('#prefill-state')).toHaveText('Refreshing · last reading');
+  await frame.getByRole('button',{name:'Share',exact:true}).click();
+  await frame.getByRole('menuitem',{name:'Copy stats',exact:true}).click();
+  await expect(frame.locator('#action-status')).toContainText('Stats copied');
+  expect(await page.evaluate(() => (window as any).previewCopied)).toContain('refreshing — held observations');
+});
+
+test('an unopened host shows setup guidance rather than an endless loading claim', async ({page}) => {
+  await page.clock.install();
+  await page.goto('/?nohost=1');
+  const frame=page.frameLocator('iframe');
+  await expect(frame.locator('#refresh')).toBeDisabled();
+  await page.clock.fastForward(6_100);
+  await expect(frame.locator('#connection')).toHaveText('Waiting for OpenChamber');
+  await expect(frame.locator('#activity')).toContainText('extension panel');
+  expect(await requests(page)).toBe(0);
+});
+
+test('host context refreshes preserve mounted controls and one monitoring loop', async ({page}) => {
+  const frame=await openPanel(page,'state=decode');
+  const original=await frame.locator('#history-inspector').elementHandle();
+  const before=await requests(page);
+  await page.evaluate(() => { for(let i=0;i<20;i++) (window as any).setPreviewTheme(i%2?'light':'dark'); });
+  await page.waitForTimeout(1_050);
+  expect(await original!.evaluate(el=>el.isConnected)).toBe(true);
+  expect((await requests(page))-before).toBeLessThanOrEqual(4);
+  expect(await page.evaluate(()=>(window as any).previewStatusChecks)).toBe(0);
+});
+
+
+test('a restored browser view waits for fresh readings even without a visibility event', async ({page}) => {
+  const frame = await openPanel(page, 'state=prefill');
+  await expect(frame.locator('#prefill-state')).toHaveText('Live reading');
+  await page.evaluate(() => { (window as any).previewHold = true; });
+  await frame.locator('main').evaluate(() => {
+    window.dispatchEvent(new PageTransitionEvent('pagehide', {persisted: true}));
+    window.dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}));
+  });
+  await expect(frame.locator('#rate')).toHaveText('—');
+  await expect(frame.locator('#prefill-state')).toHaveText('Refreshing · last reading');
+  await expect(frame.locator('#prefill-estimate')).toBeHidden();
+  await expect(frame.locator('#capture-start')).toBeDisabled();
+  await frame.locator('#compact').click();
+  await frame.locator('#compact').click();
+  await expect(frame.locator('#rate')).toHaveText('—');
 });

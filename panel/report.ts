@@ -4,10 +4,10 @@ import { contextBudget } from './context.ts';
 import { prefillReading } from './progress.ts';
 
 /** Copy only an allowlist of measurements. No raw messages, names, paths, keys or IDs. */
-export const measurementReport = (snapshot: TelemetrySnapshot, system: SystemSnapshot | null, paused: boolean, version: string, now = Date.now()): string => {
+export const measurementReport = (snapshot: TelemetrySnapshot, system: SystemSnapshot | null, paused: boolean | 'refreshing', version: string, now = Date.now()): string => {
   const scalar = (value: number | null | undefined, unit = '') => value == null || !Number.isFinite(value) ? 'not reported' : `${Number(value.toFixed(2))}${unit}`;
   const lines = [`OMLX Scope ${version} — OpenChamber extension`, 'Scope: oMLX server / whole host, not a selected chat',
-    `State: ${paused ? 'paused — held observations' : snapshot.available ? snapshot.phase : 'unavailable'}`,
+    `State: ${paused === 'refreshing' ? 'refreshing — held observations' : paused ? 'paused — held observations' : snapshot.available ? snapshot.phase : 'unavailable'}`,
     `Sample age: ${scalar(Math.max(0, (now - snapshot.sampledAt) / 1000), ' seconds')}`];
   if (!snapshot.available) lines.push(`Connection: ${snapshot.reason}`);
   if (snapshot.available) {

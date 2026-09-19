@@ -18,6 +18,9 @@ window.setPreviewEpoch = value => { previewEpoch = value; };
 window.previewOverride = {};
 window.setPreviewOverride = value => { window.previewOverride = value; };
 window.previewRequests = 0;
+window.previewStatusChecks = 0;
+window.previewOpenedURL = '';
+window.previewHold = false;
 function theme(name) {
   const light = name === 'light' || name === 'sand';
   const palette = name === 'violet' ? ['#191520','#221d2b','#dfc7ff','#9562c9','#ffffff']
@@ -46,8 +49,13 @@ window.setPreviewSession = value => { currentSession=value; post({type:'session'
 window.addEventListener('message', (event) => {
   if(event.source !== frame.contentWindow || event.data?.channel !== 'openchamber.sdk') return;
   const m = event.data;
-if(m.type === 'hello') { ready(); return; }
-  if(m.type === 'service-status') { post({type:'result',id:m.id,ok:true,payload:{status:'ready'}}); return; }
+if(m.type === 'hello') { if(!params.has('nohost')) ready(); return; }
+  if(m.type === 'open-url') { window.previewOpenedURL=m.payload.url; post({type:'result',id:m.id,ok:true,payload:null}); return; }
+  if(m.type === 'service-status') {
+    window.previewStatusChecks += 1;
+    if(params.has('denied')) post({type:'result',id:m.id,ok:false,code:'NOT_GRANTED',error:'fixture detail not for display'});
+    else post({type:'result',id:m.id,ok:true,payload:{status:params.get('service') || 'ready'}}); return;
+  }
   if(m.type === 'storage') {
     const {op,key,value} = m.payload;
     if(params.get('storage') === 'fail') { post({type:'result',id:m.id,ok:false,code:'HOST_REJECTED',error:'Fixture storage failure'}); return; }
@@ -70,6 +78,7 @@ if(m.type === 'hello') { ready(); return; }
   if(m.type !== 'service-request') return;
   window.previewRequests += 1;
   samples += 1;
+  if (window.previewHold) return;
   if (state === 'stalled' && samples > 2) return;
   const phase = state === 'prefill-stale' || state === 'prefill-missing' || state === 'prefill-malformed' ? 'prefill' : state === 'stalled' ? 'decode' : state === 'reconnect' ? samples > 4 ? 'offline' : 'decode' : state;
   const available = !['offline','auth'].includes(phase);

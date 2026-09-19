@@ -5,7 +5,8 @@
 `panel/main.ts` mounts the shell once. Monitoring updates existing text and chart
 geometry rather than replacing interactive controls. `panel/` contains small
 modules for progress, bounded histories, performance captures, sharing, and
-preferences. `applyHostReady` applies the host’s current theme on every SDK ready
+preferences. Chart inspection reads the existing history; connection help calls
+`serviceStatus` only on click. `applyHostReady` applies the host’s current theme on every SDK ready
 snapshot; semantic theme tokens distinguish accent fills from readable text.
 The Share disclosure uses SDK buttons with view-local focus and keyboard handling.
 It does not inspect or modify the parent application’s DOM.
