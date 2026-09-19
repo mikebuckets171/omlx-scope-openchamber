@@ -1,0 +1,31 @@
+name: Compatibility source
+on:
+  push:
+    branches: [work/openchamber-final-pass]
+    paths: [.github/workflows/review-source.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - run: git archive --format=zip --output="$RUNNER_TEMP/scope-source.zip" HEAD
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: openchamber/openchamber
+          ref: v1.24.2
+          path: upstream
+          persist-credentials: false
+      - run: git -C upstream archive --format=zip --output="$RUNNER_TEMP/openchamber-source.zip" HEAD
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: compatibility-source
+          path: |
+            ${{ runner.temp }}/scope-source.zip
+            ${{ runner.temp }}/openchamber-source.zip
+          retention-days: 1
+          if-no-files-found: error
