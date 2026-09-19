@@ -481,7 +481,8 @@ test('Share remains anchored, closes outside, and does not shift the monitor', a
   await frame.getByRole('menuitem',{name:'Add to chat draft'}).press('Home');
   await expect(frame.getByRole('menuitem',{name:'Copy stats',exact:true})).toBeFocused();
   await frame.locator('main').screenshot({path:info.outputPath('share-narrow.png')});
-  await frame.locator('#model').click();
+  // The popup overlays the model heading; dismiss from the unobstructed masthead.
+  await frame.locator('#scope-title').click();
   await expect(menu).toBeHidden();
   expect(await page.evaluate(() => (window as any).previewComposed)).toBeNull();
   expect(await page.evaluate(() => (window as any).previewCopied)).toBe('');
