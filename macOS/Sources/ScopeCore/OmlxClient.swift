@@ -16,7 +16,10 @@ public struct HTTPResult: Sendable {
 public struct Connection: Equatable, Sendable {
     public let endpoint: Endpoint
     public let apiKey: String
-    public init(endpoint: Endpoint, apiKey: String) { self.endpoint = endpoint; self.apiKey = apiKey }
+    public let preferredModel: String?
+    public init(endpoint: Endpoint, apiKey: String, preferredModel: String? = nil) {
+        self.endpoint = endpoint; self.apiKey = apiKey; self.preferredModel = preferredModel
+    }
 }
 
 /// No background loop: callers share one in-flight, read-only collection.
@@ -28,6 +31,8 @@ public actor OmlxClient {
     private var cookie: String?
     private var verifiedAt = -Double.infinity
     private var statsAt = -Double.infinity
+    private var contextWindows: [String: Double] = [:]
+    private var contextAt = -Double.infinity
     private var stats: Data?
     private var statsHealthy = false
     private var pendingID = UUID()
@@ -56,6 +61,7 @@ public actor OmlxClient {
         }
         if connection != next {
             connection = next; cookie = nil; verifiedAt = -.infinity
+            contextAt = -.infinity; contextWindows = [:]
             statsAt = -.infinity; stats = nil; statsHealthy = false; identity = ""; processed = nil; epoch += 1
         }
         let task = Task { await self.collect(next) }
@@ -65,13 +71,14 @@ public actor OmlxClient {
         return value
     }
 
-    private func request(_ path: String, connection: Connection, cookie: String? = nil, login: Bool = false) async throws -> HTTPResult {
+    private func request(_ path: String, connection: Connection, cookie: String? = nil, login: Bool = false, bearer: Bool = false) async throws -> HTTPResult {
         try Task.checkCancellation()
         var request = URLRequest(url: connection.endpoint.path(path))
         request.httpMethod = login ? "POST" : "GET"
         request.timeoutInterval = 3
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let cookie { request.setValue("omlx_admin_session=\(cookie)", forHTTPHeaderField: "Cookie") }
+        if bearer && !connection.apiKey.isEmpty { request.setValue("Bearer \(connection.apiKey)", forHTTPHeaderField: "Authorization") }
         if login {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONSerialization.data(withJSONObject: ["api_key": connection.apiKey, "remember": false])
@@ -86,9 +93,6 @@ public actor OmlxClient {
     }
 
     private func collect(_ connection: Connection) async -> RuntimeReading {
-        guard !connection.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return .unavailable(ConnectionError.credentialRequired.localizedDescription)
-        }
         do {
             let now = clock()
             if now - verifiedAt >= 300 {
@@ -99,24 +103,26 @@ public actor OmlxClient {
                 }
                 verifiedAt = clock()
             }
-            if cookie == nil {
+            if cookie == nil && !connection.apiKey.isEmpty {
                 let response = try await request("/admin/api/login", connection: connection, login: true)
                 guard let value = response.sessionCookie, !value.isEmpty,
                       value.rangeOfCharacter(from: .newlines) == nil else { throw ConnectionError.unauthorized }
                 cookie = value
             }
-            guard let cookie else { throw ConnectionError.unauthorized }
             // Session totals are supplemental. A statistics failure does not hide live activity.
             let refreshStats = now - statsAt >= 10
             async let activity = request("/admin/api/activity", connection: connection, cookie: cookie)
             async let supplemental = optionalStats(connection, cookie: cookie, refresh: refreshStats)
-            let (response, freshStats) = try await (activity, supplemental)
+            let refreshContext = now - contextAt >= 60
+            async let limits = optionalContext(connection, refresh: refreshContext)
+            let (response, freshStats, freshLimits) = try await (activity, supplemental, limits)
+            if refreshContext { contextWindows = freshLimits; contextAt = clock() }
             var fresh = statsHealthy && stats != nil && now - statsAt < 15
             if refreshStats {
                 statsAt = clock(); fresh = freshStats != nil; statsHealthy = fresh
                 if let freshStats { stats = freshStats }
             }
-            var result = try Normalizer.reading(activity: response.data, stats: stats)
+            var result = try Normalizer.reading(activity: response.data, stats: stats, contextWindows: contextWindows, preferredModel: connection.preferredModel)
             result.statsFresh = result.statsFresh && fresh
             let (id, currentProcessed) = Normalizer.continuity(response.data)
             if id != identity {
@@ -136,7 +142,19 @@ public actor OmlxClient {
         }
     }
 
-    private func optionalStats(_ connection: Connection, cookie: String, refresh: Bool) async -> Data? {
+    /// Context limits are optional. Failure clears them and is retried no more than once a minute.
+    private func optionalContext(_ connection: Connection, refresh: Bool) async -> [String: Double] {
+        guard refresh, let response = try? await request("/v1/models/status", connection: connection, bearer: true),
+              let json = try? JSONSerialization.jsonObject(with: response.data) else { return [:] }
+        var result: [String: Double] = [:]
+        for model in objects(object(json)["models"]) {
+            if let id = identifier(model["id"]), let limit = nonnegative(model["max_context_window"]),
+               limit > 0, limit <= 9_007_199_254_740_991, limit.rounded() == limit { result[id] = limit }
+        }
+        return result
+    }
+
+    private func optionalStats(_ connection: Connection, cookie: String?, refresh: Bool) async -> Data? {
         guard refresh else { return nil }
         return try? await request("/admin/api/stats?scope=session", connection: connection, cookie: cookie).data
     }

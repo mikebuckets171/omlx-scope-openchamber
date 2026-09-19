@@ -66,7 +66,7 @@ async function unusedPort() {
 try {
   const config = join(home, '.config/opencode');
   await mkdir(config, { recursive: true });
-  // Exercise the bundled JSONC parser. No credential means no oMLX request.
+  // Exercise the bundled JSONC parser against a closed, isolated endpoint.
   await writeFile(join(config, 'opencode.jsonc'), `// isolated smoke fixture
 {
   "provider": { "omlx": { "options": { "baseURL": "http://127.0.0.1:1/v1" } } },
@@ -98,7 +98,8 @@ try {
   assert.equal(response.status, 200);
   const snapshot = await response.json();
   assert.equal(snapshot.available, false);
-  assert.equal(snapshot.reason, 'authentication_failed', 'JSONC endpoint must parse successfully before missing-credential reporting.');
+  assert.equal(snapshot.reason, 'runtime_unreachable');
+  assert.equal(snapshot.message, 'The oMLX runtime did not answer.', 'JSONC must parse the configured endpoint before attempting health identification.');
   assert(snapshot.system && typeof snapshot.system === 'object', 'Host readings must survive unavailable oMLX.');
 
   // A real bind failure must exit and retain its actionable cause in stderr.
@@ -126,7 +127,8 @@ try {
     response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify(body));
   });
   await new Promise((resolveListen, reject) => { mockRuntime.once('error', reject); mockRuntime.listen(0, '127.0.0.1', resolveListen); });
-  const activeService = start(port, { OMLX_SCOPE_BASE_URL: `http://127.0.0.1:${mockRuntime.address().port}`, OMLX_SCOPE_API_KEY: 'isolated-smoke-key' });
+  await writeFile(join(config, 'opencode.jsonc'), `// packaged JSONC fixture\n{"provider":{"omlx":{"options":{"baseURL":"http://127.0.0.1:${mockRuntime.address().port}/v1",},},},}`);
+  const activeService = start(port, { OMLX_SCOPE_API_KEY: 'isolated-smoke-key' });
   let ready = false;
   const nextDeadline = performance.now() + 5000;
   while (performance.now() < nextDeadline && !activeService.closed) {

@@ -15,6 +15,7 @@ func renderPreviews() async throws {
     runtime.decodeAverage = 23.1; runtime.prefillAverage = 310; runtime.cacheEfficiency = 81
     runtime.modelBytes = 18_600_000_000; runtime.processBytes = 31_000_000_000
     runtime.ramCacheBytes = 2_500_000_000; runtime.ssdCacheBytes = 24_000_000_000
+    runtime.prompt = 48000; runtime.reused = 32000; runtime.contextWindow = 131072
     runtime.statsFresh = true; runtime.message = "Current request average · not instantaneous speed"
     var host = HostReading()
     host.cpu = 18; host.totalBytes = 48 * 1_073_741_824; host.nonFreeBytes = 36.7 * 1_073_741_824

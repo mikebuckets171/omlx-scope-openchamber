@@ -24,6 +24,7 @@ public struct RuntimeReading: Sendable, Equatable {
     public var rate: Double?
     public var active: Double?
     public var queued: Double?
+    public var contextWindow: Double?
     public var prompt: Double?
     public var reused: Double?
     public var output: Double?
@@ -45,6 +46,24 @@ public struct RuntimeReading: Sendable, Equatable {
     public var sampledAt = Date()
     public var epoch = 0
     public init() {}
+    /// Matches the extension: reused input is already inside prompt, not added again.
+    public var contextRemaining: Double? {
+        guard [.prefill, .decode, .processing].contains(phase), (active ?? 0) <= 1,
+              let limit = contextWindow, let prompt,
+              limit > 0, [limit, prompt].allSatisfy(Self.tokenCount) else { return nil }
+        let generated = phase == .prefill ? 0 : output
+        guard let generated, Self.tokenCount(generated), Self.tokenCount(prompt + generated),
+              prompt + generated <= limit else { return nil }
+        return limit - prompt - generated
+    }
+    public var inputReusedPercent: Double? {
+        guard let prompt, let reused, prompt > 0, reused <= prompt,
+              Self.tokenCount(prompt), Self.tokenCount(reused) else { return nil }
+        return reused / prompt * 100
+    }
+    private static func tokenCount(_ value: Double) -> Bool {
+        value.isFinite && value >= 0 && value <= 9_007_199_254_740_991 && value.rounded() == value
+    }
     public var connected: Bool { phase != .offline && phase != .connecting }
     public var hasActivity: Bool { [.decode, .prefill, .processing, .queued].contains(phase) }
     public static func unavailable(_ message: String) -> Self {

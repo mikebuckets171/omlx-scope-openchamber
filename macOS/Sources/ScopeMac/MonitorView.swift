@@ -81,6 +81,14 @@ public struct OverviewContent: View {
                 else if model.runtime.phase == .prefill {
                     Text("Prefill active · percentage not reported").font(.caption).foregroundStyle(.secondary)
                 }
+                if model.runtime.contextRemaining != nil || model.runtime.inputReusedPercent != nil {
+                    HStack(alignment: .top, spacing: 24) {
+                        MetricValue(title: "Tokens to model limit", value: DisplayFormat.tokens(model.runtime.contextRemaining))
+                        MetricValue(title: "Input reused", value: DisplayFormat.percent(model.runtime.inputReusedPercent))
+                    }
+                    Text(model.paused ? "Last reading · monitoring paused" : "Model limit, not OpenCode’s compaction threshold.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 HistoryPlot(history: model.speedHistory, height: 104, caption: model.paused ? "Paused history" : "Request average · tok/s")
                 Divider()
                 HStack(alignment: .top, spacing: 24) {

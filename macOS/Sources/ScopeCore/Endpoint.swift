@@ -21,7 +21,7 @@ public enum ConnectionError: Error, LocalizedError, Sendable, Equatable {
         switch self {
         case .invalidEndpoint: "Use http://127.0.0.1:8000 or your local oMLX port."
         case .credentialRequired: "Add your oMLX API key in Connection settings."
-        case .unauthorized: "oMLX rejected the saved API key. Update it in Connection settings."
+        case .unauthorized: "oMLX requires a valid API key or rejected the supplied key. Check Connection settings."
         case .unsafeResponse: "The local server returned an unexpected response. Check the oMLX port."
         case .oversized: "The local response exceeded the monitoring size limit."
         case .malformed: "The server's monitoring format was not recognised. Check oMLX compatibility."

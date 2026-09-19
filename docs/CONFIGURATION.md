@@ -28,6 +28,12 @@ source may need an explicit supported setup before discovery works.
 
 ## Troubleshooting
 
+**No API key:** Scope attempts read-only access after identifying the local oMLX
+server. Readings work only if that server already permits them; otherwise supply
+a valid key. Scope never changes the server's authentication policy or falls back
+to unauthenticated access after a supplied key is rejected. The extension service
+still requires OpenChamber's separate authorization token on every route.
+
 Open **Connection help** at the bottom of the monitor. **Check connection** asks
 OpenChamber whether its extension service is starting, running, stopped, or failed.
 A running extension service does not by itself mean oMLX is connected. The check

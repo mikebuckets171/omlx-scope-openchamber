@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.8 — 2026-09-19
+
+- Check monitoring contracts against oMLX 0.6.4 and OpenChamber 1.24.2; update the pinned SDK.
+- Remove automatic Keychain access at Mac app startup. Keep manually entered keys in memory unless secure storage is explicitly selected.
+- Add explicit Keychain actions with cancellation handling, without changing existing saved-key access controls.
+- Bring Mac connection discovery in line with the extension's supported OpenCode JSON/JSONC and absolute configuration paths.
+- Show validated model-context headroom and request-matched input reuse in the Mac overview and menu popover.
+- Align prefill-stage changes, concurrent and non-streaming activity, and malformed-data handling across both clients.
+- Support servers that already allow key-free monitoring, without changing their authentication policy.
+- Run shared reading and configuration fixtures against both implementations; document supported and intentionally separate features.
+
+Mac builds remain ad-hoc-signed previews, not notarized. This update removes
+Scope's background Keychain access, not Finder or Gatekeeper security decisions.
+
 ## 0.5.7 — 2026-09-19
 
 - Point at the speed chart to inspect earlier readings, or use the arrow keys.

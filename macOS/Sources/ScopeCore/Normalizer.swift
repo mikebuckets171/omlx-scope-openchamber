@@ -16,7 +16,7 @@ func identifier(_ value: Any?) -> String? {
 }
 
 public enum Normalizer {
-    public static func reading(activity: Data, stats: Data?, now: Date = Date()) throws -> RuntimeReading {
+    public static func reading(activity: Data, stats: Data?, contextWindows: [String: Double] = [:], preferredModel: String? = nil, now: Date = Date()) throws -> RuntimeReading {
         let root = object(try JSONSerialization.jsonObject(with: activity))
         guard let active = root["active_models"] as? Object,
               let models = active["models"] as? [Object] else { throw ConnectionError.malformed }
@@ -47,18 +47,29 @@ public enum Normalizer {
         let model = models.first { !objects($0["generating"]).isEmpty }
             ?? models.first { !objects($0["prefilling"]).isEmpty }
             ?? models.first { (nonnegative($0["active_requests"]) ?? 0) > 0 }
-            ?? models.first { $0["is_loading"] as? Bool == true } ?? models.first
+            ?? models.first { $0["is_loading"] as? Bool == true }
+            ?? models.first { preferredModel != nil && identifier($0["id"]) == preferredModel } ?? models.first
         if let model {
             result.model = identifier(model["id"]).map { String($0.prefix(300)) }
             result.modelBytes = nonnegative(model["actual_size"])
+            if let id = identifier(model["id"]), let limit = contextWindows[id], limit.isFinite,
+               limit > 0, limit <= 9_007_199_254_740_991, limit.rounded() == limit { result.contextWindow = limit }
+            let cachedModel = objects(cache["models"]).first { identifier($0["id"]) == identifier(model["id"]) }
+            let lookup = object(cachedModel?["last_prefix_lookup"])
+            func matchingLookup(_ flight: Object) -> Object {
+                guard let id = identifier(flight["request_id"]), id == identifier(lookup["request_id"]) else { return [:] }
+                return lookup
+            }
             let generating = objects(model["generating"]), prefilling = objects(model["prefilling"])
-            let activeModels = models.filter { !objects($0["generating"]).isEmpty || !objects($0["prefilling"]).isEmpty || (nonnegative($0["active_requests"]) ?? 0) > 0 }.count
-            if activeModels > 1 || (result.active ?? 0) > 1 || generating.count + prefilling.count > 1 {
+            let activeModels = models.filter { !objects($0["generating"]).isEmpty || !objects($0["prefilling"]).isEmpty || !objects($0["activities"]).isEmpty || (nonnegative($0["active_requests"]) ?? 0) > 0 }.count
+            if activeModels > 1 || (result.active ?? 0) > 1 || generating.count + prefilling.count + objects(model["activities"]).count > 1 {
                 result.phase = .processing; result.message = "Concurrent requests. Per-request speed is not combined."
             } else if let flight = generating.first {
                 result.output = nonnegative(flight["generated_tokens"])
                 result.elapsed = nonnegative(flight["elapsed_seconds"])
-                result.prompt = nonnegative(flight["prompt_tokens"])
+                let matched = matchingLookup(flight)
+                result.prompt = nonnegative(flight["prompt_tokens"]) ?? nonnegative(matched["prompt_tokens"])
+                result.reused = nonnegative(matched["reused_kv_tokens"])
                 if let age = nonnegative(flight["last_activity_age_seconds"]), age <= 5,
                    (result.output ?? 0) > 0, (result.elapsed ?? 0) > 0 {
                     result.phase = .decode; result.rate = nonnegative(flight["tokens_per_second"])
@@ -68,22 +79,27 @@ public enum Normalizer {
                 }
             } else if let flight = prefilling.first {
                 result.phase = .prefill; result.rate = nonnegative(flight["speed"])
-                result.prompt = nonnegative(flight["prompt_tokens"])
-                result.reused = nonnegative(flight["cached_tokens"])
+                let matched = matchingLookup(flight)
+                let waiting = objects(model["waiting"]).first {
+                    identifier(flight["request_id"]) != nil && identifier($0["request_id"]) == identifier(flight["request_id"])
+                }
+                result.prompt = nonnegative(flight["prompt_tokens"]) ?? nonnegative(waiting?["prompt_tokens"]) ?? nonnegative(matched["prompt_tokens"])
+                result.reused = nonnegative(flight["cached_tokens"]) ?? nonnegative(matched["reused_kv_tokens"])
                 result.elapsed = nonnegative(flight["elapsed"])
                 if let total = nonnegative(flight["total"]), total > 0, total <= 9_007_199_254_740_991,
                    let done = nonnegative(flight["processed"]), done <= total,
                    done.rounded() == done, total.rounded() == total {
                     result.progress = done / total
                     result.prefillProcessed = done; result.prefillTotal = total
-                    result.prefillETA = nonnegative(flight["eta"])
+                    if done < total, (result.rate ?? 0) > 0 { result.prefillETA = nonnegative(flight["eta"]) }
                 }
                 result.progressStale = flight["progress_stale"] as? Bool == true
                 if result.progressStale { result.rate = nil; result.prefillETA = nil }
                 result.message = result.progressStale ? "Waiting for fresh prefill progress." : "Reading context · reported prefill average"
             } else if model["is_loading"] as? Bool == true || (result.active ?? 0) > 0 || !objects(model["activities"]).isEmpty {
                 result.phase = .processing; result.message = "Runtime is working. Token speed is not reported yet."
-            } else if nonnegative(model["active_requests"]) == 0 {
+            } else if nonnegative(model["active_requests"]) == 0 ||
+                ["waiting_requests", "prefilling", "generating", "waiting", "activities", "is_loading"].contains(where: { model[$0] != nil }) {
                 result.phase = (result.queued ?? 0) > 0 ? .queued : .idle
                 result.message = result.phase == .idle ? "Model ready for the next request." : "Requests are waiting to run."
             }
@@ -93,7 +109,7 @@ public enum Normalizer {
         if pressure["enabled"] as? Bool == true { result.processBytes = nonnegative(pressure["current_bytes"]) }
         result.ramCacheBytes = nonnegative(cache["hot_cache_size_bytes"])
         result.ssdCacheBytes = nonnegative(object(cache["cold_tier"])["physical_bytes"])
-        if result.ssdCacheBytes == nil, let physical = nonnegative(cache["total_size_bytes"]) {
+        if cache["cold_tier"] as? Object == nil, let physical = nonnegative(cache["total_size_bytes"]) {
             let sidecars = objects(cache["models"]).reduce(0.0) { $0 + (nonnegative(object($1["gdn_staging"])["sidecar_size_bytes"]) ?? 0) }
             let total = physical + sidecars
             result.ssdCacheBytes = total.isFinite ? total : nil
@@ -115,7 +131,8 @@ public enum Normalizer {
             for phase in ["prefilling", "generating"] {
                 for flight in objects(model[phase]) {
                     // JSON serialization prevents ambiguous delimiter collisions.
-                    let identity = [identifier(model["id"]) ?? "", phase, identifier(flight["request_id"]) ?? ""]
+                    let identity: [Any] = [identifier(model["id"]) ?? "", phase, identifier(flight["request_id"]) ?? "",
+                                          phase == "prefilling" ? [identifier(flight["phase"]) ?? "", nonnegative(flight["total"]) as Any? ?? NSNull()] : NSNull()]
                     parts.append(String(data: (try? JSONSerialization.data(withJSONObject: identity)) ?? Data(), encoding: .utf8) ?? "")
                     if phase == "prefilling" { progress = nonnegative(flight["processed"]) }
                 }

@@ -13,8 +13,13 @@ not written to a database. Interface preferences are persisted locally.
 
 The extension reads the documented local configuration and oMLX credential
 locations listed in [Configuration](docs/CONFIGURATION.md). The native app can
-read its existing oMLX/OpenCode connection or store a manually entered API key
-in macOS Keychain. Neither rewrites those configuration files.
+read its existing oMLX/OpenCode connection. New manually entered keys stay in
+memory until quit unless the user chooses Keychain storage. Keychain access is
+explicit: startup and polling never read, write or remove an item. Existing items
+are left untouched on upgrade. Neither client rewrites configuration files.
+
+With no API key, the clients can read an oMLX server that already allows access.
+They do not change authentication settings or retry a rejected key without auth.
 
 ## Sharing
 

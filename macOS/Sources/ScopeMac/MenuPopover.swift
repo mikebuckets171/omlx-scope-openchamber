@@ -41,6 +41,12 @@ public struct MenuPopover: View {
                 if model.runtime.phase == .prefill {
                     ReadingRow(title: "Context reading", value: model.paused || model.runtime.rate == nil ? "—" : DisplayFormat.number(model.runtime.rate) + " tok/s")
                 }
+                if let remaining = model.runtime.contextRemaining {
+                    ReadingRow(title: "Tokens to model limit", value: DisplayFormat.tokens(remaining))
+                }
+                if let reused = model.runtime.inputReusedPercent {
+                    ReadingRow(title: "Input reused", value: DisplayFormat.percent(reused))
+                }
                 ReadingRow(title: "CPU", value: DisplayFormat.percent(model.host.cpu))
                 ReadingRow(title: "Non-free RAM", value: DisplayFormat.bytes(model.host.nonFreeBytes))
                 ReadingRow(title: "Swap used", value: DisplayFormat.bytes(model.host.swapBytes))

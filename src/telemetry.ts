@@ -319,7 +319,7 @@ const normalizeFlights = (model: JsonObject | null, lookup: JsonObject, ambiguou
   const waiting = arrayOfObjects(model.waiting);
   const prefilling = arrayOfObjects(model.prefilling);
   const generatingFlights = arrayOfObjects(model.generating);
-  if (prefilling.length + generatingFlights.length > 1 || (nonnegative(model.active_requests) ?? 0) > 1) {
+  if (prefilling.length + generatingFlights.length + arrayOfObjects(model.activities).length > 1 || (nonnegative(model.active_requests) ?? 0) > 1) {
     return { ...summary, phase: 'processing', message: 'Concurrent requests · per-request speed withheld' };
   }
 
@@ -492,7 +492,7 @@ export const normalizeOmlxTelemetry = (
     active = freshActive;
   }
 
-  if (active === null || !Array.isArray(active.models)) return null;
+  if (active === null || !Array.isArray(active.models) || active.models.some((model) => asObject(model) === null)) return null;
   const models = arrayOfObjects(active.models);
   const model = matchingModel(models, preferredModel);
   const modelID = text(model?.id);
@@ -503,7 +503,7 @@ export const normalizeOmlxTelemetry = (
         ? models.reduce((total, item) => total + nonnegative(item.active_requests)!, 0)
         : null);
   const activeModelCount = models.filter((item) => (
-    (arrayOfObjects(item.prefilling).length + arrayOfObjects(item.generating).length > 0)
+    (arrayOfObjects(item.prefilling).length + arrayOfObjects(item.generating).length + arrayOfObjects(item.activities).length > 0)
       || (nonnegative(item.active_requests) ?? 0) > 0
   )).length;
   const ambiguous = activeModelCount > 1 || (activeRequests !== null && activeRequests > 1);
@@ -543,7 +543,7 @@ export const normalizeOmlxTelemetry = (
     liveDecodeTPS: flight.liveDecodeTPS,
     livePrefillTPS: flight.livePrefillTPS,
     sessionAverageDecodeTPS: firstNumber(statsData.avg_generation_tps),
-    sessionCacheEfficiencyPercent: firstNumber(statsData.cache_efficiency),
+    sessionCacheEfficiencyPercent: (nonnegative(statsData.cache_efficiency) ?? Infinity) <= 100 ? nonnegative(statsData.cache_efficiency) : null,
     promptTokens: flight.promptTokens,
     cachedTokens: flight.cachedTokens,
     completionTokens: flight.completionTokens,

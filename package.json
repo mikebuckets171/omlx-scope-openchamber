@@ -1,6 +1,6 @@
 {
   "name": "omlx-scope-openchamber",
-  "version": "0.5.7",
+  "version": "0.5.8",
   "description": "A lightweight oMLX and Mac resource monitor for OpenChamber",
   "private": true,
   "license": "MIT",
@@ -70,7 +70,7 @@
     "check:all": "bun run check && bun run test:browser"
   },
   "dependencies": {
-    "@openchamber/sdk": "1.24.0",
+    "@openchamber/sdk": "1.24.2",
     "jsonc-parser": "3.3.1"
   },
   "devDependencies": {
