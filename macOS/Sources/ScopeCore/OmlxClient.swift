@@ -144,7 +144,10 @@ public actor OmlxClient {
 
     /// Context limits are optional. Failure clears them and is retried no more than once a minute.
     private func optionalContext(_ connection: Connection, refresh: Bool) async -> [String: Double] {
-        guard refresh, let response = try? await request("/v1/models/status", connection: connection, bearer: true),
+        guard refresh else { return [:] }
+        // Rate-limit attempts even when the parallel activity request fails.
+        contextAt = clock(); contextWindows = [:]
+        guard let response = try? await request("/v1/models/status", connection: connection, bearer: true),
               let json = try? JSONSerialization.jsonObject(with: response.data) else { return [:] }
         var result: [String: Double] = [:]
         for model in objects(object(json)["models"]) {
