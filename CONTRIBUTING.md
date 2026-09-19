@@ -14,8 +14,14 @@ bun run test:browser
 
 `bun run check` runs type checks, unit/integration tests, builds both bundles, and
 starts the service from an extracted installation ZIP without `node_modules`.
+On macOS, that package check also verifies wired memory, compression, and swap
+through seven fresh Node service processes. Each read must pass within the
+production deadline; failed reads are not retried until they pass.
+
 The browser suite starts its own local preview server. `bun run preview` starts
 that server for interactive work; its readings are synthetic, not from oMLX.
+DFlash checks cover preparation, observed output, frozen readings, and fallback
+prefill. Shared fixtures keep Swift and TypeScript interpretations aligned.
 
 On a Mac, run `swift test --package-path macOS` for native tests and
 `./script/build_and_run.sh --verify` to build and open the companion.
