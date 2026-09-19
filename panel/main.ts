@@ -418,5 +418,15 @@ host.onReady((ready) => {
   poller.start();
 });
 document.addEventListener('visibilitychange', syncMonitoring);
-window.addEventListener('pagehide', (event) => { poller.stop(); clearFreshness(); resources.break(); signal.break(); insightView.suspend(); captureView.suspend(); monitorGeneration += 1; if (!event.persisted) { disposed = true; clearTimeout(readyDeadline); sharing.dispose(); inspector.dispose(); connectionHelp.dispose(); if (statusTimer !== null) clearTimeout(statusTimer); host.dispose(); } });
+window.addEventListener('pagehide', (event) => {
+  poller.stop(); clearFreshness(); resources.break(); signal.break();
+  insightView.suspend(); captureView.suspend(); monitorGeneration += 1;
+  interrupted = true; awaitingFresh = true;
+  if (!event.persisted) {
+    disposed = true; clearTimeout(readyDeadline);
+    sharing.dispose(); inspector.dispose(); connectionHelp.dispose();
+    if (statusTimer !== null) clearTimeout(statusTimer);
+    host.dispose();
+  }
+});
 window.addEventListener('pageshow', (event) => { if (event.persisted && mounted) { syncMonitoring(); poller.start(); } });

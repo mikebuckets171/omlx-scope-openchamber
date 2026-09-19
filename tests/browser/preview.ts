@@ -606,3 +606,21 @@ test('host context refreshes preserve mounted controls and one monitoring loop',
   expect((await requests(page))-before).toBeLessThanOrEqual(4);
   expect(await page.evaluate(()=>(window as any).previewStatusChecks)).toBe(0);
 });
+
+
+test('a restored browser view waits for fresh readings even without a visibility event', async ({page}) => {
+  const frame = await openPanel(page, 'state=prefill');
+  await expect(frame.locator('#prefill-state')).toHaveText('Live reading');
+  await page.evaluate(() => { (window as any).previewHold = true; });
+  await frame.locator('main').evaluate(() => {
+    window.dispatchEvent(new PageTransitionEvent('pagehide', {persisted: true}));
+    window.dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}));
+  });
+  await expect(frame.locator('#rate')).toHaveText('—');
+  await expect(frame.locator('#prefill-state')).toHaveText('Refreshing · last reading');
+  await expect(frame.locator('#prefill-estimate')).toBeHidden();
+  await expect(frame.locator('#capture-start')).toBeDisabled();
+  await frame.locator('#compact').click();
+  await frame.locator('#compact').click();
+  await expect(frame.locator('#rate')).toHaveText('—');
+});
