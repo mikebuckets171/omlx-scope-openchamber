@@ -26,6 +26,7 @@ export class ChartInspector {
   }
   update(points: readonly SignalPoint[], end: number, upper: number): void {
     this.points = points.filter(point => point.at >= end - 90_000 && point.at <= end);
+    if (this.selectedAt !== null && !this.points.some(point => point.at === this.selectedAt)) this.selectedAt = null;
     this.end = end; this.upper = upper;
     this.plot.tabIndex = this.points.length ? 0 : -1;
     this.plot.setAttribute('aria-disabled', String(!this.points.length));

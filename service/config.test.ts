@@ -165,3 +165,24 @@ it('explicit HTTP default port remains a valid loopback endpoint', () => {
   expect(parseLoopbackOrigin('http://127.0.0.1:80')?.origin).toBe('http://127.0.0.1');
   expect(parseLoopbackOrigin('http://127.0.0.1:0')).toBeNull();
 });
+
+
+it.skipIf(process.platform === 'win32')('rejects a pipe configuration without waiting for a writer', async () => {
+  const { mkdtemp, rm } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { spawnSync } = await import('node:child_process');
+  const home = await mkdtemp(join(tmpdir(), 'scope-pipe-config-'));
+  try {
+    const path = join(home, 'config.json');
+    const create = spawnSync('mkfifo', [path], {timeout: 2_000, encoding: 'utf8'});
+    expect(create.status).toBe(0);
+    const input = JSON.stringify({home, env: {OPENCODE_CONFIG: path}});
+    const script = `import {resolveOmlxConfig} from ${JSON.stringify(new URL('./config.ts', import.meta.url).href)}; console.log((await resolveOmlxConfig(${input})).issue);`;
+    // Isolate the call so a regression cannot leave a blocked filesystem thread in the test runner.
+    const read = spawnSync(process.execPath, ['--eval', script], {timeout: 2_000, encoding: 'utf8'});
+    expect(read.error).toBeUndefined();
+    expect(read.status).toBe(0);
+    expect(read.stdout.trim()).toBe('unreadable_config');
+  } finally { await rm(home, {recursive: true, force: true}); }
+});

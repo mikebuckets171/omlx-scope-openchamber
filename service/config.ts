@@ -1,5 +1,6 @@
 import { parse, type ParseError } from 'jsonc-parser/lib/esm/main.js';
 import { open } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 
@@ -83,7 +84,8 @@ const readJson = async (path: string, readText: (path: string) => Promise<ReadTe
 
 const defaultReadText = async (path: string): Promise<ReadTextResult> => {
   try {
-    const handle = await open(path, 'r');
+    // Do not wait for a writer when an invalid configuration path is a FIFO.
+    const handle = await open(path, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0));
     try {
       const limit = 1_000_000;
       const stat = await handle.stat();
