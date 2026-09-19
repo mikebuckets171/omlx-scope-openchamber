@@ -31,6 +31,7 @@ test('Next reply records only after arming and stops when the selected chat is i
   await selectedChat(page, true);
   await frame.locator('#refresh').click();
   await expect(frame.locator('#capture')).toHaveAttribute('data-recording', 'true');
+  await expect(frame.locator('#capture-progress')).toBeHidden();
   await expect(frame.locator('#capture-speed')).toContainText('tok/s');
   await selectedChat(page, false);
   await expect(frame.locator('#capture-state')).toHaveText('Captured');
@@ -135,4 +136,16 @@ test('capture guidance is expandable, keyboard accessible and preserves monitor 
   await expect(help).toHaveJSProperty('open', true);
   expect(await original!.evaluate(node => node.isConnected)).toBe(true);
   await heading.press('Enter'); await expect(help).toHaveJSProperty('open', false);
+});
+
+
+test('Next reply is sidebar-only because selecting a chat closes the full page', async ({ page }) => {
+  const frame = await openPanel(page, 'state=idle&surface=page');
+  await selectedChat(page, false);
+  await expect(frame.locator('#capture-length option[value="reply"]')).toBeDisabled();
+  await expect(frame.locator('#capture-length')).toHaveValue('30');
+  const help = frame.locator('#capture details');
+  await help.locator('summary').click();
+  await expect(help).toContainText('navigating away from a full-page monitor');
+  await expect(frame.locator('#capture-state')).toHaveText('On demand');
 });

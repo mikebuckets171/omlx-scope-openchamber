@@ -149,8 +149,9 @@ failure. The selected OpenChamber chat is metadata, not request attribution.
 
 ## Next reply and Turn Stats
 
-Next reply is an optional capture mode. A click arms it for the selected idle
-chat. The SDK’s busy-state changes choose the start and end; only fresh oMLX
+Next reply is an optional sidebar capture mode. A click arms it for the selected
+idle chat. The full-page monitor does not offer this mode: selecting a chat closes
+that page in OpenChamber. The SDK’s busy-state changes choose the start and end; only fresh oMLX
 samples after the start contribute. Replayed state and cached samples cannot
 start it twice. No prompt is sent and conversation text is not read.
 

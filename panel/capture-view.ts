@@ -15,7 +15,7 @@ export const captureMarkup = `<section id="capture" class="capture-card" aria-la
     <div id="capture-baseline" class="capture-baseline" hidden><span id="capture-reference">Pinned reference</span><strong id="capture-change">—</strong></div>
     <div class="insight-actions"><button id="capture-pin" type="button">Pin reference</button><button id="capture-copy" type="button">Copy capture</button><button id="capture-clear" type="button">Clear</button></div>
   </div>
-  <details class="reading-help"><summary>How captures work<span aria-hidden="true">+</span></summary><p>Captures use existing readings. They send no prompts and stay in memory. Compare similar workloads, not different tasks.</p><p><b>Next reply</b> waits for the selected chat to start, then stops when it goes idle. Keep this view open. Readings cover all oMLX requests, not just that chat. Changing chats, pausing, or losing the connection stops the capture. Waiting is limited to two minutes; recording to ten minutes.</p><p><b>Turn Stats</b> belongs to OpenChamber. It reports the completed turn’s timing and tokens. OMLX Scope cannot read or add rows to it through the current extension API. Use it alongside these live runtime observations; the speeds measure different things.</p></details>
+  <details class="reading-help"><summary>How captures work<span aria-hidden="true">+</span></summary><p>Captures use existing readings. They send no prompts and stay in memory. Compare similar workloads, not different tasks.</p><p><b>Next reply</b> works in the sidebar beside your chat. It waits for the chat to start, then stops when it goes idle. Keep the panel open; navigating away from a full-page monitor closes that view. Readings cover all oMLX requests, not just that chat. Changing chats, pausing, or losing the connection stops the capture. Waiting is limited to two minutes; recording to ten minutes.</p><p><b>Turn Stats</b> belongs to OpenChamber. It reports the completed turn’s timing and tokens. OMLX Scope cannot read or add rows to it through the current extension API. Use it alongside these live runtime observations; the speeds measure different things.</p></details>
 </section>`;
 
 export class CaptureView {
@@ -25,13 +25,27 @@ export class CaptureView {
   private paused = false;
   private disposed = false;
   private copyPending = false;
+  private sidebar = false;
   private readonly unsubscribe: () => void;
-  constructor(private readonly root: HTMLElement, private readonly copied: (text: string) => Promise<void>, private readonly status: (message: string) => void, private readonly version: string, host: Pick<HostClient, 'onSession'>) {
-    this.unsubscribe = host.onSession(session => { this.reply.setSession(session); this.render(); });
+  constructor(private readonly root: HTMLElement, private readonly copied: (text: string) => Promise<void>, private readonly status: (message: string) => void, private readonly version: string, host: Pick<HostClient, 'onSession' | 'onReady'>) {
+    const sessionSubscription = host.onSession(session => { this.reply.setSession(session); this.render(); });
+    const readySubscription = host.onReady(ready => {
+      this.sidebar = ready.surface === 'panel';
+      const selector = this.node('capture-length') as HTMLSelectElement;
+      const replyOption = selector.querySelector<HTMLOptionElement>('option[value="reply"]')!;
+      replyOption.disabled = !this.sidebar;
+      replyOption.textContent = this.sidebar ? 'Next reply' : 'Next reply · sidebar only';
+      if (!this.sidebar) {
+        this.reply.cancel('Open the sidebar monitor to follow your next reply.');
+        if (this.nextReply) selector.value = '30';
+      }
+      this.render();
+    });
+    this.unsubscribe = () => { sessionSubscription(); readySubscription(); };
     this.node('capture-length').addEventListener('change', () => this.render());
     this.node('capture-start').addEventListener('click', () => {
       if (this.nextReply) {
-        if (this.paused || !this.reply.arm()) this.status('Select an idle chat first, then arm Next reply. Nothing is sent for you.');
+        if (this.paused || !this.sidebar || !this.reply.arm()) this.status('Select an idle chat first, then arm Next reply. Nothing is sent for you.');
       } else {
         const length = (this.node('capture-length') as HTMLSelectElement).value === '60' ? 60 : 30;
         if (this.paused || !this.latest || !this.capture.start(this.latest, length)) {
@@ -83,9 +97,9 @@ export class CaptureView {
     this.node('capture-stop').hidden = !active;
     this.text('capture-stop', this.reply.state === 'armed' ? 'Cancel' : 'Stop');
     this.text('capture-start', this.nextReply ? 'Arm next reply' : 'Record window');
-    (this.node('capture-start') as HTMLButtonElement).disabled = this.paused || active || (this.nextReply && !this.reply.canArm);
+    (this.node('capture-start') as HTMLButtonElement).disabled = this.paused || active || (this.nextReply && (!this.sidebar || !this.reply.canArm));
     (this.node('capture-length') as HTMLSelectElement).disabled = active;
-    this.node('capture-progress').hidden = !recording;
+    this.node('capture-progress').hidden = !recording || c?.targetSeconds === 600;
     this.node('capture-results').hidden = c === null;
     this.node('capture-reply-state').hidden = !this.nextReply;
     this.text('capture-reply-state', this.reply.message || 'Select an idle chat, arm capture, then send your message.');

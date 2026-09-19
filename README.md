@@ -80,8 +80,8 @@ what the local server is doing now. Their speed readings cover different time
 intervals and should not be expected to match.
 
 **Next reply** lets you compare the same working period: select an idle chat,
-choose Next reply under Performance capture, then arm it before sending your
-message. Keep the monitor open. It stops when the chat goes idle, but still
+open the sidebar monitor, choose Next reply under Performance capture, then
+arm it before sending your message. Keep the panel open. It stops when the chat goes idle, but still
 measures all oMLX requests—not just that chat. The current OpenChamber API does
 not let extensions add rows to Turn Stats or read its per-turn measurements.
 
