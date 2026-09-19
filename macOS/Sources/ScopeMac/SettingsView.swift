@@ -3,10 +3,11 @@ import ScopeCore
 
 public struct SettingsView: View {
     @Bindable var model: MonitorModel
+    let updates: UpdateController?
     @State private var endpoint = ""
     @State private var key = ""
     @State private var confirmForget = false
-    public init(model: MonitorModel) { self.model = model }
+    public init(model: MonitorModel, updates: UpdateController? = nil) { self.model = model; self.updates = updates }
     public var body: some View {
         Form {
             Section("Connection") {
@@ -36,12 +37,19 @@ public struct SettingsView: View {
                 Text("One shared sampler serves the window and menu bar. Hidden views update less often; icon-only mode stops hidden sampling. Sleep and pause stop updates. Low Power Mode automatically reduces refresh frequency.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            if let updates {
+                Section("Software Updates") {
+                    HStack { Text("OMLX Scope \(updates.versionLabel)"); Spacer(); CheckForUpdatesButton(updates: updates) }
+                    Text(updates.secureInstallation ? "Signed updates from GitHub." : "Preview build. Updates are installed manually from GitHub.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
             Section("Privacy") {
                 HStack {
                     Button("Copy Diagnostics") { model.copyDiagnostics() }
                     Button("Forget Saved Key…", role: .destructive) { confirmForget = true }
                 }
-                Text("Diagnostics contain version and connection state, not keys, prompts, model names, or request data. There is no analytics or automatic updater.")
+                Text("Diagnostics contain version and connection state, not keys, prompts, model names, or request data. No analytics or model data leaves the app. Update checks use public GitHub release information.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }.formStyle(.grouped).padding(8).frame(width: 560)

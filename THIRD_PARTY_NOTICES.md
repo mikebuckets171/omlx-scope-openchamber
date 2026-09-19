@@ -38,3 +38,16 @@ The full MIT license text for these dependencies is reproduced below:
 > LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 > SOFTWARE.
+
+
+## Sparkle (native Mac app only)
+
+Sparkle 2.10.0 provides the standard signed-update mechanism. It is pinned to an
+exact release in SwiftPM; that release’s manifest pins its binary SHA-256.
+Sparkle is not linked or embedded in preview builds. In Developer ID builds,
+the complete upstream license and bundled-component notices are copied into
+`OMLX Scope.app/Contents/Resources/Sparkle-LICENSE.txt` during packaging.
+
+Source and license: https://github.com/sparkle-project/Sparkle/tree/2.10.0
+
+The OpenChamber extension does not include Sparkle.

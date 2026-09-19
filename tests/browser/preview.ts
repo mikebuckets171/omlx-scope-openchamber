@@ -180,14 +180,14 @@ test('view choices survive reload with no repeated storage writes or extra polli
 test('copy stats uses host clipboard and reports failure without claiming success', async ({ page }) => {
   let frame = await openPanel(page, 'state=prefill&long=1&sessionTitle=PRIVATE');
   const before = await requests(page);
-  await frame.locator('#pause').click(); await frame.locator('#copy-stats').click();
-  await expect(frame.locator('#action-status')).toContainText('Readings copied');
+  await frame.locator('#pause').click(); await frame.getByRole('button', { name: 'Share', exact: true }).click(); await frame.getByRole('menuitem', { name: 'Copy stats', exact: true }).click();
+  await expect(frame.locator('#action-status')).toContainText('Stats copied');
   const copied = await page.evaluate(() => (window as unknown as { previewCopied: string }).previewCopied);
   expect(copied).toContain('36% remaining'); expect(copied).toContain('held observations');
   expect(copied).not.toMatch(/PRIVATE|publisher|request_id|api_key/);
   expect(await requests(page)).toBe(before);
   frame = await openPanel(page, 'clipboard=fail');
-  await frame.locator('#copy-stats').click();
+  await frame.getByRole('button', { name: 'Share', exact: true }).click(); await frame.getByRole('menuitem', { name: 'Copy stats', exact: true }).click();
   await expect(frame.locator('#action-status')).toContainText('Could not copy');
 });
 
@@ -340,26 +340,33 @@ test('copy recent handles denied clipboard without claiming success', async ({ p
   await expect(frame.locator('#action-status')).toContainText('Could not copy observations');
 });
 
-test('OpenChamber context follows host metadata and appends a sanitized draft without sending', async ({page}) => {
-  const frame=await openPanel(page,'chat=1');
-  await expect(frame.locator('#chamber-session')).toHaveText('Local coding session');
-  await expect(frame.locator('#chamber-state')).toContainText('Chat working');
-  await frame.locator('#compose-stats').click();
-  await expect(frame.locator('#action-status')).toContainText('nothing was sent automatically');
-  const draft=await page.evaluate(()=>(window as any).previewComposed);
+test('sharing is a quiet menu built with SDK buttons and appends a sanitized draft without sending', async ({page}) => {
+  const frame = await openPanel(page, 'chat=1');
+  await expect(frame.locator('#chamber-context')).toHaveCount(0);
+  const share = frame.getByRole('button', {name:'Share', exact:true});
+  await expect(frame.getByRole('menuitem')).toHaveCount(0);
+  await share.click();
+  await frame.getByRole('menuitem', {name:'Add to chat draft'}).click();
+  await expect(frame.locator('#action-status')).toContainText('Nothing was sent automatically');
+  const draft = await page.evaluate(() => (window as any).previewComposed);
   expect(draft.mode).toBe('append'); expect(draft.text).toContain('not a selected chat');
-  expect(draft.text).not.toContain('Local coding session');expect(draft.text).not.toContain('Qwen');
-  expect(await page.evaluate(()=>(window as any).previewUnexpectedSends)).toBe(0);
-  await page.evaluate(()=>(window as any).setPreviewSession(null));
-  await expect(frame.locator('#compose-stats')).toBeDisabled();
-  await expect(frame.locator('#chamber-session')).toHaveText('No chat selected');
+  expect(draft.text).not.toMatch(/Local coding session|Qwen/);
+  expect(await page.evaluate(() => (window as any).previewUnexpectedSends)).toBe(0);
+  await page.evaluate(() => (window as any).setPreviewSession(null));
+  await share.click();
+  await expect(frame.getByRole('menuitem', {name:'Add to chat draft'})).toBeDisabled();
 });
 
-test('draft failures never claim success and no selected session cannot draft',async({page})=>{
-  let frame=await openPanel(page);await expect(frame.locator('#compose-stats')).toBeDisabled();
-  frame=await openPanel(page,'chat=1&compose=fail');await frame.locator('#compose-stats').click();
+test('draft failures do not claim success; sharing without a selected chat is unavailable', async ({page}) => {
+  let frame = await openPanel(page);
+  await frame.getByRole('button', {name:'Share',exact:true}).click();
+  await expect(frame.getByRole('menuitem',{name:'Add to chat draft'})).toBeDisabled();
+  frame = await openPanel(page,'chat=1&compose=fail');
+  await frame.getByRole('button',{name:'Share',exact:true}).click();
+  await frame.getByRole('menuitem',{name:'Add to chat draft'}).click();
   await expect(frame.locator('#action-status')).toContainText('Could not confirm');
-  await expect(frame.locator('#compose-stats')).toBeEnabled();
+  await frame.getByRole('button',{name:'Share',exact:true}).click();
+  await expect(frame.getByRole('menuitem',{name:'Add to chat draft'})).toBeEnabled();
 });
 
 test('performance capture observes, pins, copies, and clears without running inference',async({page})=>{
@@ -402,7 +409,8 @@ test('coordinated monitor layout keeps new controls legible with prefill visible
     await frame.locator('#capture-pin').click();
     await page.evaluate(()=>(window as any).setPreviewState('prefill'));await frame.locator('#refresh').click();
     await expect(frame.locator('#prefill-remaining')).toHaveText('36% remaining');
-    await expect(frame.locator('#chamber-session')).toBeVisible();
+    await expect(frame.getByRole('button', {name:'Share',exact:true})).toBeVisible();
+    await expect(frame.locator('#chamber-context')).toHaveCount(0);
     expect(await frame.locator('main').evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
     const height=await frame.locator('main').evaluate(el=>Math.ceil(el.getBoundingClientRect().height)+40);
     await page.setViewportSize({width,height});
@@ -410,4 +418,72 @@ test('coordinated monitor layout keeps new controls legible with prefill visible
     if(width===320){await frame.locator('#compact').click();await expect(frame.locator('#prefill-remaining')).toBeVisible();await expect(frame.locator('#capture')).toBeHidden();await frame.locator('main').screenshot({path:info.outputPath(`coordinated-compact-${theme}.png`)});}
   }
   expect(errors).toEqual([]);
+});
+
+
+test('Share preserves keyboard focus, responds to session changes, and survives monitoring updates', async ({page}) => {
+  const frame = await openPanel(page, 'chat=1');
+  const share = frame.getByRole('button',{name:'Share',exact:true});
+  await share.focus(); await share.press('Enter');
+  await expect(frame.getByRole('menu')).toBeVisible();
+  await page.waitForTimeout(1200);
+  await expect(frame.getByRole('menu')).toBeVisible();
+  await frame.getByRole('menu').press('Escape');
+  await expect(share).toBeFocused();
+  await expect(frame.getByRole('menu')).toHaveCount(0);
+  await page.evaluate(() => (window as any).setPreviewSession(null));
+  await share.press('Enter');
+  await expect(frame.getByRole('menuitem',{name:'Add to chat draft'})).toBeDisabled();
+  expect(await page.evaluate(() => (window as any).previewComposed)).toBeNull();
+});
+
+test('live host theme changes update the existing view without restarting monitoring', async ({page}, info) => {
+  await page.setViewportSize({width:1160,height:1350});
+  const frame = await openPanel(page,'state=prefill&chat=1&surface=page');
+  await frame.locator('#pause').click();
+  const count = await requests(page);
+  const themes = ['dark','light','violet','sand'];
+  for (const theme of themes) {
+    await page.evaluate(value => (window as any).setPreviewTheme(value), theme);
+    const expected = await page.evaluate(() => (window as any).previewTheme);
+    await expect.poll(() => frame.locator('.scope').evaluate(el => getComputedStyle(el).getPropertyValue('--oc-primary-text').trim())).toBe(expected.tokens.primaryText);
+    await expect(frame.locator('#prefill-remaining')).toHaveText('36% remaining');
+    await expect(frame.locator('#pause')).toHaveAttribute('aria-pressed','true');
+    expect(await frame.locator('main').evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+    const height = await frame.locator('main').evaluate(el => Math.ceil(el.getBoundingClientRect().height) + 40);
+    await page.setViewportSize({width:1160,height});
+    await frame.locator('main').screenshot({path:info.outputPath(`theme-${theme}-1160.png`)});
+  }
+  expect(await requests(page)).toBe(count);
+  await page.setViewportSize({width:320,height:1200});
+  await frame.locator('#compact').click();
+  await frame.getByRole('button',{name:'Share',exact:true}).click();
+  await expect(frame.getByRole('menuitem',{name:'Add to chat draft'})).toBeVisible();
+  expect(await frame.locator('main').evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  await frame.locator('main').screenshot({path:info.outputPath('share-compact-sand.png')});
+});
+
+
+test('Share remains anchored, closes outside, and does not shift the monitor', async ({ page }, info) => {
+  await page.setViewportSize({width:320,height:1200});
+  const frame = await openPanel(page,'chat=1&state=prefill');
+  const share = frame.getByRole('button',{name:'Share',exact:true});
+  const before = await frame.locator('#model').boundingBox();
+  await share.click();
+  const menu = frame.getByRole('menu');
+  await expect(menu).toBeVisible();
+  expect(await frame.locator('#model').boundingBox()).toEqual(before);
+  const bounds = await menu.boundingBox();
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(320);
+  await frame.getByRole('menuitem',{name:'Copy stats',exact:true}).press('ArrowDown');
+  await expect(frame.getByRole('menuitem',{name:'Add to chat draft'})).toBeFocused();
+  await frame.getByRole('menuitem',{name:'Add to chat draft'}).press('Home');
+  await expect(frame.getByRole('menuitem',{name:'Copy stats',exact:true})).toBeFocused();
+  await frame.locator('main').screenshot({path:info.outputPath('share-narrow.png')});
+  // The popup overlays the model heading; dismiss from the unobstructed masthead.
+  await frame.locator('#scope-title').click();
+  await expect(menu).toBeHidden();
+  expect(await page.evaluate(() => (window as any).previewComposed)).toBeNull();
+  expect(await page.evaluate(() => (window as any).previewCopied)).toBe('');
 });

@@ -11,7 +11,7 @@ import { Preferences, type PreferenceKey } from './preferences.ts';
 import { measurementReport } from './report.ts';
 import { InsightView } from './insights-view.ts';
 import { CaptureView, captureMarkup } from './capture-view.ts';
-import { OpenChamberView, chamberMarkup } from './openchamber-view.ts';
+import { SharingControls } from './openchamber-view.ts';
 import { contextBudget } from './context.ts';
 import { version } from '../package.json';
 
@@ -26,11 +26,10 @@ root.innerHTML = `
     <div class="brand"><svg class="scope-mark" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="11"/><path d="M3 14h6l3-5 4 10 3-5h6"/></svg><h1 id="scope-title">OMLX <span>Scope</span></h1></div>
     <div class="monitor-controls"><button id="efficiency" type="button" aria-label="Energy-saving updates" aria-pressed="false" title="Energy-saving updates: reduce monitoring refresh frequency"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 3c-8-1-13 3-10 9s10 1 10-9ZM4 16l8-8"/></svg></button><button id="pause" type="button" aria-pressed="false" title="Pause this monitor, not inference"><svg viewBox="0 0 20 20" aria-hidden="true"><path id="pause-symbol" d="M7 5v10M13 5v10"/></svg><span id="pause-label">Pause</span></button><button id="refresh" type="button" title="Refresh local telemetry" aria-label="Refresh local telemetry"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 7a6 6 0 1 0 .1 5M16 3v4h-4"/></svg></button></div>
   </header>
-  <div class="connection"><span class="connection-dot" aria-hidden="true"></span><span id="connection" role="status">Connecting to oMLX</span><span class="local-tag">LOCAL / READ ONLY</span></div>
-  <div class="view-tools" aria-label="Monitor view options"><button id="compact" type="button" aria-pressed="false">Compact view</button><span id="cadence">Adaptive updates</span><button id="copy-stats" type="button" title="Copy readings only. No keys, chat text, model IDs, session names or paths.">Copy stats</button></div>
+  <div class="connection"><span class="connection-dot" aria-hidden="true"></span><span id="connection" role="status">Connecting to oMLX</span><span class="local-tag">Local · read-only</span></div>
+  <div class="view-tools" aria-label="Monitor view options"><button id="compact" type="button" aria-pressed="false">Compact view</button><span id="cadence">Adaptive updates</span><div id="share-actions" class="share-actions" aria-label="Share readings"></div></div>
   <p id="action-status" class="action-status" role="status" hidden></p>
   <p id="notice" class="notice" role="status" hidden></p>
-  ${chamberMarkup}
   <div class="workspace">
   <section class="instrument" aria-label="Inference activity">
     <div class="model-line"><span class="eyebrow">INFERENCE</span><span id="phase" class="phase">Connecting</span></div>
@@ -326,9 +325,14 @@ pauseButton.addEventListener('click', () => {
   syncMonitoring();
 });
 
-const actionStatus = (message: string): void => { text('action-status', message); hidden('action-status', !message); };
+let statusTimer: ReturnType<typeof setTimeout> | null = null;
+const actionStatus = (message: string): void => {
+  if (statusTimer !== null) clearTimeout(statusTimer);
+  text('action-status', message); hidden('action-status', !message);
+  statusTimer = message ? setTimeout(() => { hidden('action-status', true); statusTimer = null; }, 8_000) : null;
+};
 const captureView = new CaptureView(shell, text => host.writeClipboard(text), actionStatus, version);
-new OpenChamberView(shell, host, () => [measurementReport(latest, lastSystem, userPaused, version), captureView.report()].filter(Boolean).join('\n\n'), actionStatus);
+const sharing = new SharingControls(node('share-actions'), host, () => [measurementReport(latest, lastSystem, userPaused, version), captureView.report()].filter(Boolean).join('\n\n'), actionStatus);
 const applyPreference = (key: PreferenceKey, value: boolean): void => {
   if (disposed) return;
   if (key === 'efficient') {
@@ -358,15 +362,6 @@ node('copy-recent').addEventListener('click', async () => {
     if (!disposed) actionStatus('Recent observations copied without model names or request data.');
   } catch { if (!disposed) actionStatus('Could not copy observations. The clipboard was not confirmed.'); }
 });
-node('copy-stats').addEventListener('click', async () => {
-  const copy = node('copy-stats') as HTMLButtonElement;
-  copy.disabled = true;
-  try {
-    await host.writeClipboard(measurementReport(latest, lastSystem, userPaused, version));
-    if (!disposed) actionStatus('Readings copied. No credentials or chat content included.');
-  } catch { if (!disposed) actionStatus('Could not copy readings. The clipboard was not confirmed.'); }
-  finally { if (!disposed) copy.disabled = false; }
-});
 
 button.addEventListener('click', () => {
   manualRefresh = true;
@@ -385,5 +380,5 @@ host.onReady((ready) => {
   poller.start();
 });
 document.addEventListener('visibilitychange', syncMonitoring);
-window.addEventListener('pagehide', (event) => { poller.stop(); clearFreshness(); resources.break(); signal.break(); insightView.suspend(); captureView.suspend(); monitorGeneration += 1; if (!event.persisted) { disposed = true; host.dispose(); } });
+window.addEventListener('pagehide', (event) => { poller.stop(); clearFreshness(); resources.break(); signal.break(); insightView.suspend(); captureView.suspend(); monitorGeneration += 1; if (!event.persisted) { disposed = true; sharing.dispose(); if (statusTimer !== null) clearTimeout(statusTimer); host.dispose(); } });
 window.addEventListener('pageshow', (event) => { if (event.persisted && mounted) { syncMonitoring(); poller.start(); } });

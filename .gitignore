@@ -19,3 +19,13 @@ macOS/.swiftpm/
 
 # Also ignore linked development dependencies.
 /node_modules
+
+# Local signing material
+*.p12
+*.p8
+*.pem
+*.key
+
+# Python test caches
+__pycache__/
+*.pyc

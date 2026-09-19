@@ -31,6 +31,11 @@ without compiling them.
 
 ## Release checks
 
+See [Release process](docs/RELEASING.md) for CI publication and native signing.
+The native app pins Sparkle; do not update or remove its key/signature checks
+without reviewing the upstream security guidance.
+
+
 Run `bun run check:all` and confirm that rebuilding produces no bundle diff.
 The package verifier creates a fresh ZIP from the explicit `package.json` file
 allowlist, checks its entries, and compares extracted contents with the sources.
@@ -67,3 +72,7 @@ Native menu-bar tests must distinguish prefill progress from generation speed,
 preserve remaining/completed preferences, and avoid turning missing counters
 into zero remaining. Hidden CPU/memory modes must neither poll the runtime nor
 inherit an active model's faster sampling cadence.
+
+Theme changes should use the documented host tokens, not a separately stored
+palette. Test a live host theme switch while paused and with the Share menu open.
+Sharing must stay append-only and user-initiated.

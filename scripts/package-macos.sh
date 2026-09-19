@@ -1,48 +1,90 @@
 #!/bin/bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-[[ "$(uname -s)" == Darwin ]] || { echo 'macOS is required to build the native app.' >&2; exit 1; }
+[[ "$(uname -s)" == Darwin ]] || { echo 'macOS is required.' >&2; exit 1; }
 VERSION="$(/usr/bin/plutil -extract version raw -o - "$ROOT/package.json")"
 CONFIGURATION="${CONFIGURATION:-release}"
-swift build --package-path "$ROOT/macOS" -c "$CONFIGURATION" --product OMLXScope
-BIN="$(swift build --package-path "$ROOT/macOS" -c "$CONFIGURATION" --show-bin-path)"
+MODE="${SCOPE_DISTRIBUTION:-preview}"
+IDENTITY="-"
+if [[ "$MODE" == developer-id ]]; then
+  : "${SIGN_IDENTITY:?Set your Developer ID Application identity.}"
+  : "${SPARKLE_PUBLIC_KEY:?Set your Sparkle Ed25519 public key.}"
+  [[ "$SIGN_IDENTITY" == 'Developer ID Application:'* ]] || { echo 'A Developer ID Application identity is required.' >&2; exit 1; }
+  IDENTITY="$SIGN_IDENTITY"
+elif [[ "$MODE" != preview ]]; then
+  echo 'SCOPE_DISTRIBUTION must be preview or developer-id.' >&2; exit 1
+fi
+SCOPE_DISTRIBUTION="$MODE" swift build --package-path "$ROOT/macOS" -c "$CONFIGURATION" --product OMLXScope \
+  -Xlinker -rpath -Xlinker '@executable_path/../Frameworks'
+BIN="$(SCOPE_DISTRIBUTION="$MODE" swift build --package-path "$ROOT/macOS" -c "$CONFIGURATION" --show-bin-path)"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 APP="$STAGE/OMLX Scope.app"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$ROOT/dist"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks" "$ROOT/dist"
 cp "$BIN/OMLXScope" "$APP/Contents/MacOS/OMLXScope"
 cp "$ROOT/LICENSE" "$APP/Contents/Resources/LICENSE.txt"
-cat > "$APP/Contents/Info.plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-<key>CFBundleExecutable</key><string>OMLXScope</string>
-<key>CFBundleIdentifier</key><string>com.mikebuckets171.omlx-scope</string>
-<key>CFBundleName</key><string>OMLX Scope</string>
-<key>CFBundleDisplayName</key><string>OMLX Scope</string>
-<key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>$VERSION</string>
-<key>CFBundleVersion</key><string>$VERSION</string>
-<key>LSMinimumSystemVersion</key><string>14.0</string>
-<key>NSPrincipalClass</key><string>NSApplication</string>
-<key>CFBundleIconFile</key><string>Scope</string>
-<key>NSHighResolutionCapable</key><true/>
-<key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
-</dict></plist>
-PLIST
+cp "$ROOT/THIRD_PARTY_NOTICES.md" "$APP/Contents/Resources/THIRD_PARTY_NOTICES.md"
+# Only Developer ID builds link and embed the checksum-pinned Sparkle binary.
+if [[ "$MODE" == developer-id ]]; then
+  FRAMEWORK="$(find "$ROOT/macOS/.build/artifacts" -type d -name Sparkle.framework | head -1)"
+  [[ -n "$FRAMEWORK" ]] || { echo 'The resolved Sparkle framework is missing.' >&2; exit 1; }
+  /usr/bin/ditto "$FRAMEWORK" "$APP/Contents/Frameworks/Sparkle.framework"
+  SPARKLE_LICENSE="$ROOT/macOS/.build/checkouts/Sparkle/LICENSE"
+  [[ -f "$SPARKLE_LICENSE" ]] || { echo 'Sparkle license is missing.' >&2; exit 1; }
+  cp "$SPARKLE_LICENSE" "$APP/Contents/Resources/Sparkle-LICENSE.txt"
+fi
+export VERSION MODE APP
+python3 - <<'PY'
+import base64,os,plistlib
+from pathlib import Path
+v=os.environ['VERSION']
+p={
+ 'CFBundleExecutable':'OMLXScope','CFBundleIdentifier':'com.mikebuckets171.omlx-scope',
+ 'CFBundleName':'OMLX Scope','CFBundleDisplayName':'OMLX Scope','CFBundlePackageType':'APPL',
+ 'CFBundleShortVersionString':v,'CFBundleVersion':v,'LSMinimumSystemVersion':'14.0',
+ 'NSPrincipalClass':'NSApplication','CFBundleIconFile':'Scope','NSHighResolutionCapable':True,
+ 'NSAppTransportSecurity':{'NSAllowsLocalNetworking':True},
+ # Keep update consent explicit; no profiling, HTML notes, or unsigned extraction.
+ 'SUEnableAutomaticChecks':False, 'SUAutomaticallyUpdate':False,'SUEnableSystemProfiling':False,
+ 'SUShowReleaseNotes':False, 'SUEnableJavaScript':False,
+ 'SURequireSignedFeed':True,'SUVerifyUpdateBeforeExtraction':True,'SUScheduledCheckInterval':86400,
+ 'SUSignedFeedFailureExpirationInterval':0,
+}
+if os.environ['MODE']=='developer-id':
+ key=os.environ['SPARKLE_PUBLIC_KEY']
+ assert len(base64.b64decode(key,validate=True))==32, 'Invalid Ed25519 public key'
+ p.update(SUPublicEDKey=key,SUFeedURL='https://raw.githubusercontent.com/mikebuckets171/omlx-scope-openchamber/updates/appcast.xml')
+with (Path(os.environ['APP'])/'Contents/Info.plist').open('wb') as f:plistlib.dump(p,f)
+PY
 swift "$ROOT/scripts/macos-icon.swift" "$STAGE/Scope.iconset"
 /usr/bin/iconutil -c icns "$STAGE/Scope.iconset" -o "$APP/Contents/Resources/Scope.icns"
-# Ad-hoc signing verifies local bundle integrity; it is not Developer ID notarization.
-/usr/bin/codesign --force --sign - "$APP"
-/usr/bin/codesign --verify --strict --verbose=2 "$APP"
+SIGN_ARGS=(--force --sign "$IDENTITY" --options runtime)
+if [[ "$MODE" == developer-id ]]; then SIGN_ARGS+=(--timestamp); else SIGN_ARGS+=(--timestamp=none); fi
+# Sign nested code inside-out. No --deep signing or library-validation exceptions.
+if [[ "$MODE" == developer-id ]]; then
+  FW="$APP/Contents/Frameworks/Sparkle.framework"
+  while IFS= read -r -d '' TOOL; do /usr/bin/codesign "${SIGN_ARGS[@]}" "$TOOL"; done < <(find "$FW" -type f -name Autoupdate -print0)
+  while IFS= read -r -d '' BUNDLE; do /usr/bin/codesign "${SIGN_ARGS[@]}" "$BUNDLE"; done < <(find "$FW" -depth -type d \( -name '*.xpc' -o -name '*.app' \) -print0)
+  /usr/bin/codesign "${SIGN_ARGS[@]}" "$FW"
+fi
+/usr/bin/codesign "${SIGN_ARGS[@]}" "$APP"
+/usr/bin/codesign --verify --deep --strict --verbose=2 "$APP"
 /usr/bin/plutil -lint "$APP/Contents/Info.plist"
+/usr/bin/codesign --display --verbose=4 "$APP" 2>&1 | grep -q 'flags=.*runtime' || { echo 'Hardened runtime is missing.' >&2; exit 1; }
+if [[ "$MODE" == preview ]] && /usr/bin/otool -L "$APP/Contents/MacOS/OMLXScope" | grep -q Sparkle; then
+  echo 'Preview build unexpectedly links the signed updater.' >&2; exit 1
+fi
 if /usr/bin/otool -L "$APP/Contents/MacOS/OMLXScope" | grep -E '/(opt/homebrew|Users|usr/local)/'; then
-    echo 'Native binary depends on a non-system library.' >&2; exit 1
+  echo 'Unexpected build-machine library dependency.' >&2; exit 1
 fi
 SIZE="$(stat -f %z "$APP/Contents/MacOS/OMLXScope")"
-[[ "$SIZE" -lt 8000000 ]] || { echo 'Native executable exceeds the 8 MB budget.' >&2; exit 1; }
+[[ "$SIZE" -lt 8000000 ]] || { echo 'Executable exceeds the 8 MB budget.' >&2; exit 1; }
 rm -rf "$ROOT/dist/OMLX Scope.app"
 /usr/bin/ditto "$APP" "$ROOT/dist/OMLX Scope.app"
 /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP" "$ROOT/dist/OMLX-Scope-macOS-$VERSION.zip"
-echo "PASS: native app $VERSION; executable $SIZE bytes; no bundled runtime or non-system dynamic libraries."
-echo 'Signing: ad-hoc; not Developer ID signed or notarized.'
+echo "PASS: native app $VERSION; executable $SIZE bytes; distribution $MODE."
+if [[ "$MODE" == preview ]]; then
+  echo 'Distribution: hardened, ad-hoc preview. Not notarized. Automatic installation disabled.'
+else
+  echo 'Distribution: Developer ID candidate. Notarize and staple before publishing.'
+fi

@@ -1,109 +1,112 @@
+<div align="center">
+
 # OMLX Scope
 
-**Your local model and your Mac, at a glance.**
+**Your local model, in view.**
 
-A lightweight, read-only [oMLX](https://github.com/jundot/omlx) monitor for
-[OpenChamber](https://openchamber.dev). Follow inference activity, memory use,
-and CPU load without leaving your workspace.
+Live oMLX monitoring inside OpenChamber, with an optional native Mac companion.
 
-[Installation](#install-the-openchamber-extension) · [Configuration](docs/CONFIGURATION.md) ·
-[Metric reference](docs/METRICS.md) · [Changelog](CHANGELOG.md)
+[Install](#install) · [Metrics](docs/METRICS.md) · [Configuration](docs/CONFIGURATION.md) · [Contributing](CONTRIBUTING.md)
 
-## Features
+</div>
 
-- **Inside your workflow:** host-provided OpenChamber chat state and a one-click
-  stats report appended to the chat draft. Nothing is sent automatically.
-- **Prefill at a glance:** percentage remaining, processed/total tokens, and
-  oMLX's current-stage estimate. Missing or held progress is never guessed.
-- **Performance captures:** record 30 or 60 seconds of existing observations,
-  pin a reference, and compare observed generation speed and peak footprint.
-  No test prompts, persistent logs, or extra requests.
-- **Inference insights:** request averages, recent generation speed, model-context
-  headroom, cache reuse, loaded models, and bounded recent observations.
-- **Mac resources:** CPU, non-free RAM, wired/compressed memory, and swap—even
-  when oMLX is unavailable. Optional native app with a phase-aware menu bar.
-- **Fits your workspace:** detailed and compact layouts, host light/dark themes,
-  saved energy-saving preferences, and sanitized stats/capture copying.
+OMLX Scope brings the readings you care about beside your conversation: prefill
+progress, token speed, cache reuse, and your Mac’s resources. It complements
+oMLX’s dashboard rather than replacing it.
 
-Read-only runtime monitoring. No analytics, cloud backend, external fonts,
-third-party chart library, or automatic inference. Context headroom is the model's
-reported limit, not OpenCode's compaction threshold. Captures are observations,
-not controlled benchmarks or proof that a setting caused a speed change.
+<!-- Product screenshots use synthetic readings, never a performance claim. -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/mikebuckets171/omlx-scope-openchamber/releases/download/v0.5.6/extension-dark.png">
+  <img alt="OMLX Scope full-page monitor" src="https://github.com/mikebuckets171/omlx-scope-openchamber/releases/download/v0.5.6/extension-light.png">
+</picture>
 
-## Install the OpenChamber extension
+*Full-page extension view with sample data. The panel follows OpenChamber’s theme.*
 
-Requires **OpenChamber 1.24.0 or newer** on desktop or web, with oMLX running
-on the same host.
+## Inside OpenChamber
 
-1. Open **Settings → Extensions** in OpenChamber.
-2. Paste the repository URL and select **Add**:
+- **Follow inference:** prefill percentage remaining, processed tokens, reported
+  stage-time estimates, request-average speed, and recent observed speed.
+- **Understand the workload:** cache reuse, model-context headroom, loaded models,
+  CPU, memory, and swap—with unavailable or held readings clearly identified.
+- **Compare observations:** capture 30 or 60 seconds, pin a reference, then compare
+  a similar run. No benchmark prompts or extra inference are started.
+- **Stay in the conversation:** compact mode keeps the essentials close. The
+  Share menu copies a measurement report or adds it to your chat draft on click.
+  Nothing is sent automatically.
 
-   ```text
-   https://github.com/mikebuckets171/omlx-scope-openchamber
-   ```
+Uses OpenChamber’s documented panel, full-page, theme, storage, clipboard, and
+composition APIs. No host patches. Runtime observations remain **server-wide**;
+they are not guaranteed to belong to the selected chat.
 
-3. Review and approve the local service permission.
-4. Open **OMLX Scope** from the extension sidebar. For a larger view, use
-   **Extension pages** above the session list.
+## Install
 
-You can also install a release ZIP or a local repository folder. Built files
-are included; installing the extension does not require a development toolchain.
-Git-based installations receive updates through Settings → Extensions.
+### OpenChamber extension
 
-## Connect to oMLX
+Requires **OpenChamber 1.24.0 or newer**, with oMLX on the same host.
 
-OMLX Scope reads your existing OpenCode provider configuration and saved oMLX
-credential. The endpoint must use `http://127.0.0.1:<port>`; an OpenCode provider
-URL ending in `/v1` is also accepted. The service never changes your configuration.
+In **Settings → Extensions**, add this repository and review the permissions:
 
-See [Configuration](docs/CONFIGURATION.md) for supported files and troubleshooting.
+```text
+https://github.com/mikebuckets171/omlx-scope-openchamber
+```
 
-## Optional Mac app
+Alternatively, install `omlx-scope-openchamber-0.5.6.zip` from
+[Releases](https://github.com/mikebuckets171/omlx-scope-openchamber/releases/latest).
+The installable ZIP includes the built files; the GitHub source archives are not
+extension installation packages.
 
-Version **0.5.5** updates both the OpenChamber extension and the optional Mac app.
+### Mac companion
 
-The native Mac companion provides a monitoring window and menu-bar popover,
-with an **Activity** readout that shows **36% left** during prefill and token speed
-while generating. Remaining/completed percentage is selectable in Settings.
-CPU, memory, and icon-only modes remain available. It uses SwiftUI
-and Apple’s resource APIs: no Electron, bundled Node runtime, or background daemon.
+Download `OMLX-Scope-macOS-0.5.6.zip` from the same release, quit the old app,
+and move **OMLX Scope.app** into Applications. Requires **Apple Silicon and
+macOS 14 or newer**. Install it separately from the extension.
 
-Download **OMLX-Scope-macOS-0.5.5.zip** from Releases on an Apple Silicon Mac
-running macOS 14 or newer. Unzip and move **OMLX Scope.app** to Applications.
-The native app is currently an **ad-hoc-signed preview, not notarized**. See
-[Mac app setup](https://github.com/mikebuckets171/omlx-scope-openchamber/blob/main/macOS/README.md) for installation, connection, and verification limits.
+The Activity menu-bar readout shows **36% left** during prefill, then switches
+to token speed during generation. The popover and full window show more detail.
 
-## Scope and privacy
+**Mac builds are currently ad-hoc-signed previews, not notarized.** Check for
+Updates finds new Mac releases on GitHub; optional daily checks are available.
+Automatic installation is enabled only in properly configured Developer ID
+builds. See the [Mac guide](macOS/README.md) and
+[release-signing guide](docs/RELEASING.md) for the distinction.
 
-The monitor shows **server-wide activity**, not verified activity for a particular
-chat. The selected chat state is provided by OpenChamber; it does not establish
-which chat caused an oMLX request. On remote OpenChamber installations, resource readings belong to the server
-computer, not the device displaying the panel.
+## Small by design
 
-Credentials remain in the local service. Prompts, completions, and request IDs
-are not passed to the panel. No inference or model-control actions are exposed.
-The service runs with your user permissions, so install only code you trust.
-See [Privacy](PRIVACY.md) and [Security](SECURITY.md).
+The extension uses vanilla TypeScript, the OpenChamber SDK, and existing oMLX
+monitoring responses. Its reviewed extracted-package allowance is **224 KiB**.
+Histories and captures are bounded, updates slow when idle, and hidden extension
+views stop polling. The native app uses SwiftUI; only Developer ID builds include Sparkle for signed
+updates. Preview builds have no installer framework, browser, or Node runtime.
 
-Mac-specific readings are unavailable on other operating systems. GPU load,
-temperature, fan speed, and macOS memory pressure are not reported. The project
-uses OpenChamber's documented extension surfaces. The optional native app owns
-its own menu-bar item; neither component modifies OpenChamber or oMLX.
+The app and extension are independent clients. Running both can produce two sets
+of oMLX monitoring requests. Download size is not a measurement of runtime
+memory, energy use, or inference impact.
+
+## Trust and compatibility
+
+Monitoring is read-only: no prompts, model loading, runtime tuning, or cache
+clearing. Reports exclude credentials and conversation content. There is no
+analytics service. Optional Mac update checks contact GitHub.
+
+Some readings use oMLX’s dashboard endpoints, whose response format is
+version-dependent. Captures are observations, not controlled benchmarks or
+proof of successful completion. See [metric definitions](docs/METRICS.md),
+[privacy](PRIVACY.md), and [security](SECURITY.md).
 
 ## Development
 
-```bash
+```sh
 bun install --frozen-lockfile
-bun run check
-bunx playwright install chromium webkit
-bun run test:browser
+bun run check:all
+swift test --package-path macOS       # native tests on a Mac
+./script/build_and_run.sh --verify    # build and open the Mac app
 ```
 
-See [Contributing](CONTRIBUTING.md) for browser testing and release checks.
+CI checks the extracted installation package, not just source tests, and tests the
+extension in Chromium and WebKit. Native checks run on macOS ARM64. Synthetic
+previews are separate from live OpenChamber/oMLX validation.
 
-## License
+[Architecture](docs/ARCHITECTURE.md) · [Release process](docs/RELEASING.md) ·
+[Third-party notices](THIRD_PARTY_NOTICES.md) · [MIT license](LICENSE)
 
-[MIT](LICENSE). [Third-party notices](THIRD_PARTY_NOTICES.md).
-
-OMLX Scope is an independent project, not affiliated with or endorsed by
-OpenChamber or oMLX.
+Independent community project; not affiliated with OpenChamber, oMLX, or Apple.

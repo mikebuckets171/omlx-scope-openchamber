@@ -4,10 +4,11 @@ import ScopeCore
 
 public struct MenuPopover: View {
     let model: MonitorModel
+    let updates: UpdateController?
     @State private var viewID = UUID()
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
-    public init(model: MonitorModel) { self.model = model }
+    public init(model: MonitorModel, updates: UpdateController? = nil) { self.model = model; self.updates = updates }
     public var body: some View {
         VStack(alignment: .leading, spacing: 17) {
             HStack {
@@ -57,6 +58,7 @@ public struct MenuPopover: View {
                 Menu {
                     Button("Settings…") { openSettings(); NSApp.activate(ignoringOtherApps: true) }
                     Button("Refresh") { model.refresh() }.disabled(model.paused || model.busy)
+                    if let updates { CheckForUpdatesButton(updates: updates) }
                     Button("Copy Diagnostics") { model.copyDiagnostics() }
                     Divider()
                     Button("Quit OMLX Scope") { NSApp.terminate(nil) }.keyboardShortcut("q")

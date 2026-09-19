@@ -1,0 +1,35 @@
+name: Release
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
+concurrency:
+  group: release
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  publish:
+    if: >-
+      github.repository == 'mikebuckets171/omlx-scope-openchamber' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+      CI_RUN: ${{ github.event.workflow_run.id }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - name: Verify and publish preview packages
+        run: python3 scripts/release-preview.py
