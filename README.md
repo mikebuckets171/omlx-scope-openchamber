@@ -78,9 +78,10 @@ builds. See the [Mac guide](https://github.com/mikebuckets171/omlx-scope-opencha
 ## Small by design
 
 The extension uses vanilla TypeScript, the OpenChamber SDK, and existing oMLX
-monitoring responses. Histories and captures are bounded, updates slow when idle, and hidden extension
-views stop polling. The native app uses SwiftUI; only Developer ID builds include Sparkle for signed
-updates. Preview builds have no installer framework, browser, or Node runtime.
+monitoring responses. Histories and captures are bounded, updates slow when idle,
+and hidden extension views stop polling. The native app uses SwiftUI; only
+Developer ID builds include Sparkle for signed updates. Preview builds have no
+installer framework, browser, or Node runtime.
 
 The app and extension are independent clients. Running both can produce two sets
 of oMLX monitoring requests. Download size is not a measurement of runtime
@@ -105,14 +106,16 @@ proof of successful completion. See [metric definitions](docs/METRICS.md),
 
 ```sh
 bun install --frozen-lockfile
+bunx playwright install --with-deps chromium webkit
 bun run check:all
 swift test --package-path macOS       # native tests on a Mac
 ./script/build_and_run.sh --verify    # build and open the Mac app
 ```
 
-CI checks the extracted installation package, not just source tests, and tests the
-extension in Chromium and WebKit. Native checks run on macOS ARM64. Synthetic
-previews are separate from live OpenChamber/oMLX validation.
+CI starts the service from the extracted installation package and checks its
+included documentation links. Browser tests cover Chromium and WebKit; native
+checks run on macOS ARM64. Synthetic previews are separate from live
+OpenChamber/oMLX validation.
 
 [Architecture](https://github.com/mikebuckets171/omlx-scope-openchamber/blob/main/docs/ARCHITECTURE.md) · [Release process](https://github.com/mikebuckets171/omlx-scope-openchamber/blob/main/docs/RELEASING.md) ·
 [Third-party notices](THIRD_PARTY_NOTICES.md) · [MIT license](LICENSE)
