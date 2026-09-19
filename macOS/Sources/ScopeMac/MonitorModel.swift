@@ -34,6 +34,7 @@ public final class MonitorModel {
     @ObservationIgnored private let sampler: @Sendable () async -> HostReading
     @ObservationIgnored private var key = ""
     @ObservationIgnored private var preferredModel: String?
+    @ObservationIgnored private var configurationProblem: String?
     @ObservationIgnored private var loop: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var visibleViews: Set<UUID> = []
@@ -75,7 +76,9 @@ public final class MonitorModel {
         } else if preference != "none", saved.problem == nil, let savedKey = saved.key {
             key = savedKey; credentialSource = "OpenCode"
         }
-        if let problem = saved.problem { settingsMessage = problem }
+        // A manually chosen endpoint is independent of unrelated OpenCode configuration.
+        let usesDiscovery = preference == nil || preference == "opencode" || defaults.string(forKey: "endpoint") == nil
+        if usesDiscovery, let problem = saved.problem { settingsMessage = problem; configurationProblem = problem }
     }
 
     public var menuText: String {
@@ -178,6 +181,7 @@ public final class MonitorModel {
         // A CPU/memory-only menu does not need runtime requests while all views are hidden.
         guard isVisible || menuReadout == .speed else { return nil }
         guard ProcessInfo.processInfo.systemUptime >= nextRuntimeAt else { return nil }
+        if let problem = configurationProblem { return .unavailable(problem) }
         guard let origin = try? Endpoint(endpoint) else { return .unavailable(ConnectionError.invalidEndpoint.localizedDescription) }
         return await client.snapshot(connection: Connection(endpoint: origin, apiKey: key, preferredModel: preferredModel))
     }
@@ -196,6 +200,7 @@ public final class MonitorModel {
                 needsKeychainAccess = false
             }
             endpoint = parsed.url.absoluteString; defaults.set(endpoint, forKey: "endpoint")
+            configurationProblem = nil
             settingsMessage = entered.isEmpty ? "Connection saved. Your current key was kept."
                 : rememberInKeychain ? "Key saved in Keychain. Opening it on a future launch is your choice."
                 : "Key applied for this launch. It is not saved to disk."
@@ -219,6 +224,7 @@ public final class MonitorModel {
         key = saved.key ?? ""; credentialSource = saved.key == nil ? "No API key" : "OpenCode"
         defaults.set("opencode", forKey: "credentialPreference")
         endpoint = origin.url.absoluteString; defaults.set(endpoint, forKey: "endpoint")
+        configurationProblem = nil
         needsKeychainAccess = false
         settingsMessage = "Using your saved local connection. No files or Keychain items were changed."
         connectionChanged()
