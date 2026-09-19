@@ -1,0 +1,73 @@
+name: Prepare standalone plugin
+on:
+  push:
+    branches: [work/mlx-scope-plugin]
+    paths: [.github/workflows/prepare-plugin.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    if: github.repository == 'mikebuckets171/omlx-scope-openchamber' && github.ref == 'refs/heads/work/mlx-scope-plugin'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+      - name: Apply the checksum-verified source changes
+        run: |
+          set -euo pipefail
+          git diff --exit-code b83aa3d9db4a9806381539fec42f9fab4c4418be HEAD -- . ':!.github/workflows/prepare-plugin.yml'
+          python3 - <<'PY'
+          import base64,hashlib,json,lzma,os,subprocess
+          from pathlib import Path
+          shas=['a3fb53f5f500cb79eb4bdad930627650007eaf12','3b733c09ab109359d37126733d80371de1856813','7c4a559f606f6b7924e25a887c08644b122f86e0','6cb887ed4b054351de6a1bbabf2f83e02d8dc639','242a9d5166027d03b800792b29c837de0e90935d','2c481fc66510404ef8d8b3f0566bd769109d82e9','9f89352ad8b9fecd59ba49cc1177b349542702df']
+          pieces=[]
+          for sha in shas:
+              blob=json.loads(subprocess.check_output(['gh','api',f'repos/mikebuckets171/omlx-scope-openchamber/git/blobs/{sha}']))
+              data=base64.b64decode(blob['content'])
+              assert hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()==sha
+              pieces.append(data)
+          patch=lzma.decompress(base64.b64decode(b''.join(pieces),validate=True))
+          assert len(patch)==225396 and hashlib.sha256(patch).hexdigest()=='f04fb637bcf5e970fa0ca25a3410f84ca571c6b482565cc3198a86c7e6f19f2f'
+          target=Path(os.environ['RUNNER_TEMP'])/'plugin.patch';target.write_bytes(patch)
+          subprocess.run(['git','apply','--check',str(target)],check=True)
+          subprocess.run(['git','apply',str(target)],check=True)
+          PY
+          # These removals apply only to the separate extension branch, never main.
+          git rm -r macOS script .codex
+          git rm .github/workflows/plugin-source.yml scripts/distribute-macos.sh scripts/macos-icon.swift scripts/package-macos.sh scripts/release-preview.py scripts/test_release_preview.py scripts/verify-update-signature.swift
+      - name: Build and verify the standalone installation package
+        run: bun install --frozen-lockfile && bun run check
+      - name: Compare generated code and approved permissions
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,subprocess
+          from pathlib import Path
+          expected={'panel/main.js':'6712cffb33f2250d610ca019187514d333ce20318f4ffbe6461e4f33a9305e97','background/main.js':'dd5935f0231d471e576ce726d974cf4ee8a671c9b34868ea1fde3f7d0640681a','service/main.js':'f9fae3706579cdbb76dbefa6a122c7e1f7195fb2757af61b58c62dddab2aa6ef'}
+          for path,digest in expected.items(): assert hashlib.sha256(Path(path).read_bytes()).hexdigest()==digest,path
+          before=json.loads(subprocess.check_output(['git','show','b83aa3d9db4a9806381539fec42f9fab4c4418be:package.json']))
+          after=json.loads(Path('package.json').read_text())
+          for field in ['dependencies','devDependencies']: assert before[field]==after[field]
+          assert before['openchamber']['contributes']['service']==after['openchamber']['contributes']['service']
+          assert after['name']=='mlx-scope' and after['version']=='0.6.0'
+          assert not Path('macOS').exists()
+          assert subprocess.check_output(['git','show','b83aa3d9db4a9806381539fec42f9fab4c4418be:LICENSE'])==Path('LICENSE').read_bytes()
+          PY
+      - name: Commit only the isolated plugin branch
+        run: |
+          set -euo pipefail
+          git fetch origin work/mlx-scope-plugin
+          test "$(git rev-parse FETCH_HEAD)" = "$GITHUB_SHA"
+          git rm .github/workflows/prepare-plugin.yml
+          git add -A
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Build MLX Scope as a standalone OpenChamber extension'
+          git push origin HEAD:work/mlx-scope-plugin
