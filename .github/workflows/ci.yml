@@ -34,7 +34,7 @@ jobs:
       - name: Repeat native resource command boundary check
         if: matrix.os == 'macos-latest'
         run: |
-          for N in 1 2 3 4 5; do bun test service/mac-memory.test.ts service/native-command.test.ts; done
+          for N in 1 2 3 4 5; do bun test service/mac-memory.test.ts service/native-command.test.ts service/command-lifecycle.test.ts; done
       - name: Verify checked-in bundles
         run: git diff --exit-code -- panel/main.js service/main.js
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
